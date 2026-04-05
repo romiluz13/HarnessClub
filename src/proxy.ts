@@ -1,5 +1,5 @@
 /**
- * Next.js Edge Middleware — security headers, rate limiting, CORS.
+ * Next.js Proxy — security headers, rate limiting, CORS.
  *
  * Per api-security-best-practices:
  * - CSP headers on all responses
@@ -7,7 +7,7 @@
  * - Rate limiting via in-memory counter (edge-compatible)
  * - Security headers (X-Frame-Options, X-Content-Type-Options, etc.)
  *
- * Per nextjs-app-router-patterns: middleware runs on Edge Runtime.
+ * Per nextjs-app-router-patterns: proxy runs before route handling.
  */
 
 import { NextRequest, NextResponse } from "next/server";
@@ -17,13 +17,13 @@ const RATE_LIMIT_WINDOW_MS = 60_000;
 
 /** Rate limits per tier (requests per window) */
 const RATE_LIMITS = {
-  api: 100,         // General API
-  auth: 20,         // Auth endpoints (stricter)
-  marketplace: 200, // Public marketplace (higher)
-  copilot: 30,      // Copilot chat (LLM-backed)
+  api: 100,
+  auth: 20,
+  marketplace: 200,
+  copilot: 30,
 } as const;
 
-/** In-memory rate limit store (edge-compatible, per-instance) */
+/** In-memory rate limit store (per-instance) */
 const rateLimitStore = new Map<string, { count: number; resetAt: number }>();
 
 function getRateLimit(key: string, limit: number): { allowed: boolean; remaining: number } {
@@ -43,7 +43,6 @@ function getRateLimit(key: string, limit: number): { allowed: boolean; remaining
   return { allowed: true, remaining: limit - entry.count };
 }
 
-/** Determine rate limit tier from path */
 function getTier(path: string): keyof typeof RATE_LIMITS {
   if (path.startsWith("/api/auth")) return "auth";
   if (path.startsWith("/api/marketplace")) return "marketplace";
@@ -51,29 +50,23 @@ function getTier(path: string): keyof typeof RATE_LIMITS {
   return "api";
 }
 
-/** Security headers applied to ALL responses */
 function addSecurityHeaders(response: NextResponse): void {
-  // Prevent clickjacking
   response.headers.set("X-Frame-Options", "DENY");
-  // Prevent MIME sniffing
   response.headers.set("X-Content-Type-Options", "nosniff");
-  // Referrer policy
   response.headers.set("Referrer-Policy", "strict-origin-when-cross-origin");
-  // XSS protection (legacy browsers)
   response.headers.set("X-XSS-Protection", "1; mode=block");
-  // Permissions policy
   response.headers.set(
     "Permissions-Policy",
     "camera=(), microphone=(), geolocation=(), interest-cohort=()"
   );
-  // HSTS (only in production)
+
   if (process.env.NODE_ENV === "production") {
     response.headers.set(
       "Strict-Transport-Security",
       "max-age=31536000; includeSubDomains; preload"
     );
   }
-  // CSP
+
   response.headers.set(
     "Content-Security-Policy",
     [
@@ -88,10 +81,9 @@ function addSecurityHeaders(response: NextResponse): void {
   );
 }
 
-export function middleware(request: NextRequest) {
+export function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
-  // Only rate-limit API routes
   if (pathname.startsWith("/api/")) {
     const ip = request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ?? "unknown";
     const tier = getTier(pathname);
@@ -119,7 +111,6 @@ export function middleware(request: NextRequest) {
     return response;
   }
 
-  // Non-API routes — just add security headers
   const response = NextResponse.next();
   addSecurityHeaders(response);
   return response;
@@ -127,7 +118,6 @@ export function middleware(request: NextRequest) {
 
 export const config = {
   matcher: [
-    // Match all routes except static files and Next.js internals
     "/((?!_next/static|_next/image|favicon.ico).*)",
   ],
 };

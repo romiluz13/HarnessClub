@@ -25,18 +25,26 @@ const MAX_POLL_MS = 120_000; // 120s — M0 free tier can be slow to index
  * Poll until a specific document appears in search results.
  * Atlas Search indexes on M0 can take 10-120s to sync new documents.
  */
+interface SearchMatch {
+  _id: ObjectId;
+  metadata?: {
+    name?: string;
+  };
+  score?: number;
+}
+
 async function waitForDocInSearch(
   coll: Collection,
   pipeline: Record<string, unknown>[],
   targetId: ObjectId,
   label: string
-): Promise<Record<string, unknown>> {
+): Promise<SearchMatch> {
   const start = Date.now();
   let lastResultCount = 0;
   while (Date.now() - start < MAX_POLL_MS) {
-    const results = await coll.aggregate(pipeline).toArray();
+    const results = await coll.aggregate<SearchMatch>(pipeline).toArray();
     lastResultCount = results.length;
-    const match = results.find((r: any) => r._id.equals(targetId));
+    const match = results.find((result) => result._id.equals(targetId));
     if (match) return match;
     await new Promise((r) => setTimeout(r, POLL_INTERVAL_MS));
   }
@@ -90,8 +98,8 @@ describe("Search Pipeline — real Atlas", () => {
     ];
 
     const match = await waitForDocInSearch(coll, pipeline, FIXTURE_SKILL_ID, "$vectorSearch");
-    expect((match as any).score).toBeGreaterThan(0);
-    expect((match as any).metadata.name).toBe("MongoDB Schema Guide");
+    expect(match.score).toBeGreaterThan(0);
+    expect(match.metadata?.name).toBe("MongoDB Schema Guide");
   });
 
   it("$search lexical finds the skill by text match", async () => {
@@ -119,6 +127,6 @@ describe("Search Pipeline — real Atlas", () => {
     ];
 
     const match = await waitForDocInSearch(coll, pipeline, FIXTURE_SKILL_ID, "$search");
-    expect((match as any).metadata.name).toBe("MongoDB Schema Guide");
+    expect(match.metadata?.name).toBe("MongoDB Schema Guide");
   });
 });

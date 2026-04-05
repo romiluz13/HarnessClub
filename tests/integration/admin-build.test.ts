@@ -101,9 +101,14 @@ describe("A10.1 — Onboarding E2E", () => {
     teamId = teamResult.insertedId;
 
     // Update user memberships
-    await db.collection("users").updateOne(
+    await db.collection<UserDocument>("users").updateOne(
       { _id: ownerId },
-      { $push: { orgMemberships: { orgId, role: "org_owner", joinedAt: new Date() }, teamMemberships: { teamId, role: "owner", joinedAt: new Date() } } as Record<string, unknown> },
+      {
+        $push: {
+          orgMemberships: { orgId, role: "org_owner", joinedAt: new Date() },
+          teamMemberships: { teamId, role: "owner", joinedAt: new Date() },
+        },
+      }
     );
 
     // Verify: org exists with correct settings
@@ -155,8 +160,8 @@ describe("A10.2 — Asset Lifecycle E2E", () => {
 describe("A10.3 — Team Management E2E", () => {
   it("adds member to team", async () => {
     await addTeamMember(db, teamId, memberId, "member");
-    const team = await db.collection("teams").findOne({ _id: teamId });
-    expect(team!.memberIds.map((id: any) => id.toHexString())).toContain(memberId.toHexString());
+    const team = await db.collection<{ memberIds: ObjectId[] }>("teams").findOne({ _id: teamId });
+    expect(team!.memberIds.map((id) => id.toHexString())).toContain(memberId.toHexString());
   });
 
   it("changes member role", async () => {
@@ -170,8 +175,8 @@ describe("A10.3 — Team Management E2E", () => {
 
   it("removes member from team", async () => {
     await removeTeamMember(db, teamId, memberId);
-    const team = await db.collection("teams").findOne({ _id: teamId });
-    expect(team!.memberIds.map((id: any) => id.toHexString())).not.toContain(memberId.toHexString());
+    const team = await db.collection<{ memberIds: ObjectId[] }>("teams").findOne({ _id: teamId });
+    expect(team!.memberIds.map((id) => id.toHexString())).not.toContain(memberId.toHexString());
   });
 });
 
@@ -238,7 +243,7 @@ describe("A10.5 — Dashboard Stats Accuracy", () => {
     expect(teamCount).toBeGreaterThanOrEqual(1);
 
     await logAuditEvent(db, {
-      actorId: ownerId, action: "test:stats_check", targetId: orgId,
+      actorId: ownerId, action: "org:update", targetId: orgId,
       targetType: "organization", teamId, details: { marker: MARKER },
     });
     const logs = await getAuditLogs(db, { teamId });

@@ -12,13 +12,9 @@ import type {
   DepartmentDocument,
   CreateOrgInput,
   CreateDeptInput,
-  DepartmentType,
   OrgSettings,
 } from "@/types/organization";
 import type { CachedUserRef } from "@/types/team";
-import { getDepartmentTemplate } from "./department-templates";
-import { createAsset } from "./asset-service";
-import type { CreateAssetInput } from "@/types/asset";
 
 // ─── Organization CRUD ──────────────────────────────────────
 
@@ -106,13 +102,13 @@ export async function listUserOrgs(
 // ─── Department CRUD ──────────────────────────────────────
 
 /**
- * Create a department with optional template provisioning.
- * If template exists for the type, auto-creates starter assets.
+ * Create a department.
+ * Starter assets are provisioned only after a real team exists.
  */
 export async function createDepartment(
   db: Db,
   input: CreateDeptInput,
-  createdBy: ObjectId
+  _createdBy: ObjectId
 ): Promise<{ success: boolean; deptId?: ObjectId; assetIds?: ObjectId[]; error?: string }> {
   const now = new Date();
 
@@ -129,40 +125,7 @@ export async function createDepartment(
 
   try {
     const result = await db.collection("departments").insertOne(doc);
-    const deptId = result.insertedId;
-
-    // Auto-provision template assets if available
-    const template = getDepartmentTemplate(input.type);
-    const assetIds: ObjectId[] = [];
-
-    if (template && template.assets.length > 0) {
-      // Find or create a "default" team for this dept
-      // For now, create assets at org level (no teamId required yet)
-      for (const tmpl of template.assets) {
-        const assetInput: CreateAssetInput = {
-          type: tmpl.type,
-          teamId: new ObjectId(), // placeholder — will be linked on team creation
-          metadata: { name: tmpl.name, description: tmpl.description },
-          content: tmpl.content,
-          tags: tmpl.tags,
-          createdBy,
-        };
-        const assetResult = await createAsset(db, assetInput);
-        if (assetResult.success && assetResult.assetId) {
-          assetIds.push(assetResult.assetId);
-        }
-      }
-
-      // Store default asset IDs on the department
-      if (assetIds.length > 0) {
-        await db.collection("departments").updateOne(
-          { _id: deptId },
-          { $set: { defaultAssetIds: assetIds, updatedAt: new Date() } }
-        );
-      }
-    }
-
-    return { success: true, deptId, assetIds };
+    return { success: true, deptId: result.insertedId, assetIds: [] };
   } catch (err: unknown) {
     if ((err as { code?: number }).code === 11000) {
       return { success: false, error: "Department name already exists in this organization" };

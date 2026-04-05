@@ -214,38 +214,39 @@ export async function processOnboarding(
     { $set: { settings: teamSettings } }
   );
 
-  // ── 4. Reassign + customize dept-seeded assets ───────────
-  const seededAssetIds: ObjectId[] = deptResult.assetIds ?? [];
+  // ── 4. Seed + customize starter assets after team exists ─
+  const template = getDepartmentTemplate(answers.deptType);
+  const seededAssetIds: ObjectId[] = [];
 
-  if (seededAssetIds.length > 0) {
-    // Reassign placeholder teamId to the real team
-    await db.collection("assets").updateMany(
-      { _id: { $in: seededAssetIds } },
-      { $set: { teamId: team._id, updatedAt: new Date() } }
-    );
+  if (template) {
+    for (const tmpl of template.assets) {
+      const customizedContent = customizeContent(tmpl.content, {
+        tooling: answers.tooling,
+        scale: answers.scale,
+        workflow: answers.workflow,
+        teamName,
+        orgName,
+      });
 
-    // Customize content per wizard answers
-    for (const assetId of seededAssetIds) {
-      const asset = await db.collection("assets").findOne({ _id: assetId });
-      if (asset?.content) {
-        const customized = customizeContent(asset.content as string, {
-          tooling: answers.tooling,
-          scale: answers.scale,
-          workflow: answers.workflow,
-          teamName,
-          orgName,
-        });
-        await db.collection("assets").updateOne(
-          { _id: assetId },
-          {
-            $set: {
-              content: customized,
-              tags: [...(asset.tags ?? []), `tooling:${answers.tooling}`, `scale:${answers.scale}`],
-              updatedAt: new Date(),
-            },
-          }
-        );
+      const result = await createAsset(db, {
+        type: tmpl.type,
+        teamId: team._id,
+        metadata: { name: tmpl.name, description: tmpl.description },
+        content: customizedContent,
+        tags: [...tmpl.tags, `tooling:${answers.tooling}`, `scale:${answers.scale}`],
+        createdBy: owner.userId,
+      });
+
+      if (result.success) {
+        seededAssetIds.push(result.assetId);
       }
+    }
+
+    if (deptResult.deptId && seededAssetIds.length > 0) {
+      await db.collection("departments").updateOne(
+        { _id: deptResult.deptId },
+        { $set: { defaultAssetIds: seededAssetIds, updatedAt: new Date() } }
+      );
     }
   }
 

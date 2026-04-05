@@ -7,7 +7,7 @@
  */
 
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen, fireEvent, waitFor } from "@testing-library/react";
+import { render, screen, fireEvent, waitFor, act } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import "@testing-library/jest-dom/vitest";
 
@@ -41,13 +41,13 @@ describe("SearchBar", () => {
 
   // ── Rendering ──────────────────────────────────────────────
   it("renders search input with placeholder", () => {
-    render(<SearchBar teamId="team-1" />);
+    render(<SearchBar />);
     const input = screen.getByRole("combobox", { name: /search skills/i });
     expect(input).toBeInTheDocument();
   });
 
   it("renders keyboard shortcut hint in placeholder", () => {
-    render(<SearchBar teamId="team-1" />);
+    render(<SearchBar />);
     const input = screen.getByRole("combobox", { name: /search skills/i });
     expect(input).toHaveAttribute("placeholder", expect.stringContaining("⌘K"));
   });
@@ -55,24 +55,29 @@ describe("SearchBar", () => {
   // ── User Interaction ───────────────────────────────────────
   it("updates input value on typing", async () => {
     const user = userEvent.setup();
-    render(<SearchBar teamId="team-1" />);
+    render(<SearchBar />);
     const input = screen.getByRole("combobox", { name: /search skills/i });
     await user.type(input, "React hooks");
     expect(input).toHaveValue("React hooks");
   });
 
   it("focuses input on Cmd+K", () => {
-    render(<SearchBar teamId="team-1" />);
+    render(<SearchBar />);
     const input = screen.getByRole("combobox", { name: /search skills/i });
     fireEvent.keyDown(document, { key: "k", metaKey: true });
     expect(document.activeElement).toBe(input);
   });
 
-  it("closes suggestions and blurs on Escape", () => {
-    render(<SearchBar teamId="team-1" />);
+  it("closes suggestions and blurs on Escape", async () => {
+    const user = userEvent.setup();
+    render(<SearchBar />);
     const input = screen.getByRole("combobox", { name: /search skills/i });
-    input.focus();
-    fireEvent.keyDown(document, { key: "Escape" });
+
+    await act(async () => {
+      input.focus();
+      await user.keyboard("{Escape}");
+    });
+
     expect(document.activeElement).not.toBe(input);
   });
 
@@ -83,7 +88,7 @@ describe("SearchBar", () => {
       json: () => Promise.resolve({ results: [], total: 0 }),
     });
     const user = userEvent.setup();
-    render(<SearchBar teamId="team-1" />);
+    render(<SearchBar />);
     const input = screen.getByRole("combobox", { name: /search skills/i });
     await user.type(input, "xyznonexistent");
 
@@ -95,14 +100,14 @@ describe("SearchBar", () => {
 
   // ── Accessibility ──────────────────────────────────────────
   it("has proper aria attributes", () => {
-    render(<SearchBar teamId="team-1" />);
+    render(<SearchBar />);
     const input = screen.getByRole("combobox", { name: /search skills/i });
     expect(input.tagName).toBe("INPUT");
     expect(input).toHaveAttribute("aria-autocomplete", "list");
   });
 
   it("input has minimum touch target size", () => {
-    render(<SearchBar teamId="team-1" />);
+    render(<SearchBar />);
     const input = screen.getByRole("combobox", { name: /search skills/i });
     expect(input).toBeVisible();
   });

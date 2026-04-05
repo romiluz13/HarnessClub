@@ -2,6 +2,12 @@
 
 > Patterns discovered and validated during development. Use these — don't reinvent.
 
+### Env-Gated Optional Integration Initialization (2026-04-05)
+**When**: A module is imported during `next build`, but some integrations are only valid when deploy-time secrets are present (Auth.js adapters/providers, Voyage client, similar SDKs).
+**How**: Export a tiny capability guard like `isMongoConfigured()`, build adapters/providers conditionally, and validate secrets inside the actual request/execution path instead of logging or throwing at module scope.
+**Why**: Keeps static build/import phases clean while still failing fast the moment a real runtime path tries to use an unconfigured integration.
+**Files**: `src/lib/db.ts`, `src/lib/auth.ts`, `src/lib/voyage.ts`
+
 ### Cross-Cutting Incremental Build — V2 Architecture (NEW)
 **When**: Building features that span multiple phases (audit, scanning, UI, export)
 **How**: Start lightweight in early phase, mature in later phase. Don't wait to build "the full thing."

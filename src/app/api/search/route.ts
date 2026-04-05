@@ -21,6 +21,10 @@ import type { SearchOptions } from "@/services/search";
 import type { AssetType } from "@/types/asset";
 import { ASSET_TYPES } from "@/types/asset";
 
+interface SessionContext {
+  activeTeamId?: string;
+}
+
 export async function GET(request: NextRequest) {
   const session = await auth();
   if (!session?.user?.id) {
@@ -46,8 +50,6 @@ export async function GET(request: NextRequest) {
   }
 
   const db = await getDb();
-
-  // Get user's first team (for now, search within primary team)
   const user = await db.collection("users").findOne(
     { _id: new ObjectId(session.user.id) },
     { projection: { teamMemberships: 1 } }
@@ -58,7 +60,12 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ results: [], total: 0 });
   }
 
-  const teamId = teamMemberships[0].teamId as ObjectId;
+  const sessionContext = session as typeof session & SessionContext;
+  const requestedTeamId = searchParams.get("teamId") || sessionContext.activeTeamId;
+  const activeMembership = requestedTeamId
+    ? teamMemberships.find((membership: { teamId: ObjectId }) => membership.teamId.toHexString() === requestedTeamId)
+    : undefined;
+  const teamId = activeMembership?.teamId ?? teamMemberships[0].teamId as ObjectId;
 
   // Autocomplete mode — fast prefix match
   if (isAutocomplete) {

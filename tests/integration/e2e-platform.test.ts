@@ -371,7 +371,10 @@ describe("E2E-2: Approval Workflow Full Cycle", () => {
       diffSummary: "Changed description",
     });
 
-    const result = await submitDecision(db, reqResult.requestId, {
+    expect(reqResult.requestId).toBeDefined();
+    const requestId = reqResult.requestId as ObjectId;
+
+    const result = await submitDecision(db, requestId, {
       reviewerId: reviewerId,
       reviewerName: "E2E Reviewer",
       decision: "reject",
@@ -403,8 +406,11 @@ describe("E2E-2: Approval Workflow Full Cycle", () => {
       mode: "multi_review",
     });
 
+    expect(reqResult.requestId).toBeDefined();
+    const requestId = reqResult.requestId as ObjectId;
+
     // First approval — should still be pending
-    const first = await submitDecision(db, reqResult.requestId, {
+    const first = await submitDecision(db, requestId, {
       reviewerId: reviewerId,
       reviewerName: "E2E Reviewer",
       decision: "approve",
@@ -414,7 +420,7 @@ describe("E2E-2: Approval Workflow Full Cycle", () => {
     expect(first.newStatus).toBe("pending"); // still needs one more
 
     // Second approval — should be approved
-    const second = await submitDecision(db, reqResult.requestId, {
+    const second = await submitDecision(db, requestId, {
       reviewerId: thirdReviewer,
       reviewerName: "E2E Reviewer 2",
       decision: "approve",
@@ -594,7 +600,7 @@ describe("E2E-5: Webhook + Audit Trail", () => {
       orgId,
       teamId,
       url: "https://example.com/webhook/e2e",
-      events: ["asset:create", "asset:delete", "approval:approve"],
+      events: ["asset.created", "asset.deleted", "approval.completed"],
     });
     expect(result.webhookId).toBeDefined();
     expect(result.secret).toBeTruthy();
@@ -604,12 +610,12 @@ describe("E2E-5: Webhook + Audit Trail", () => {
     const doc = await db.collection("webhooks").findOne({ _id: webhookId });
     expect(doc).not.toBeNull();
     expect(doc!.url).toBe("https://example.com/webhook/e2e");
-    expect(doc!.events).toContain("asset:create");
+    expect(doc!.events).toContain("asset.created");
     expect(doc!.active).toBe(true);
   });
 
   it("signPayload creates HMAC-SHA256 signature", () => {
-    const payload = JSON.stringify({ event: "asset:create", data: { id: "test" } });
+    const payload = JSON.stringify({ event: "asset.created", data: { id: "test" } });
     const sig1 = signPayload(payload, "secret-key");
     const sig2 = signPayload(payload, "secret-key");
     expect(sig1).toBe(sig2); // deterministic
@@ -623,7 +629,7 @@ describe("E2E-5: Webhook + Audit Trail", () => {
   it("dispatchWebhook runs without throwing", async () => {
     // dispatchWebhook is fire-and-forget, won't actually hit the URL
     await expect(
-      dispatchWebhook(db, orgId, "asset:create", { assetId: new ObjectId().toHexString(), name: "test" })
+      dispatchWebhook(db, orgId, "asset.created", { assetId: new ObjectId().toHexString(), name: "test" })
     ).resolves.not.toThrow();
   });
 
@@ -792,7 +798,12 @@ describe("E2E-7: Copilot Agent Full Loop", () => {
       userRole: "owner",
     });
     const model = faux.getModel();
-    const searchTool = copilotSearchTool(db, teamId);
+    const searchTool = copilotSearchTool(db, {
+      currentPage: "dashboard",
+      teamId: teamId.toHexString(),
+      teamName: `E2E Team ${MARKER}`,
+      userRole: "owner",
+    });
     const scanTool = copilotScanTool(db);
 
     const agent = new PiAgent({
@@ -800,7 +811,9 @@ describe("E2E-7: Copilot Agent Full Loop", () => {
     });
 
     const events: PiAgentEvent[] = [];
-    agent.subscribe((event: PiAgentEvent) => events.push(event));
+    agent.subscribe((event: PiAgentEvent) => {
+      events.push(event);
+    });
     await agent.prompt("Hello");
 
     const types = events.map((e) => e.type);
@@ -821,20 +834,28 @@ describe("E2E-7: Copilot Agent Full Loop", () => {
       teamName: "E2E Team",
       userRole: "owner",
     });
-    const searchTool = copilotSearchTool(db, teamId);
+    const searchTool = copilotSearchTool(db, {
+      currentPage: "assets",
+      teamId: teamId.toHexString(),
+      teamName: "E2E Team",
+      userRole: "owner",
+    });
 
     const agent = new PiAgent({
       initialState: { systemPrompt, model, tools: [searchTool], messages: [] },
     });
 
     const events: PiAgentEvent[] = [];
-    agent.subscribe((event: PiAgentEvent) => events.push(event));
+    agent.subscribe((event: PiAgentEvent) => {
+      events.push(event);
+    });
     await agent.prompt("Search for copilot assets");
 
     const toolEnds = events.filter((e) => e.type === "tool_execution_end");
     expect(toolEnds.length).toBe(1);
-    expect((toolEnds[0] as any).toolName).toBe("search_assets");
-    expect((toolEnds[0] as any).isError).toBe(false);
+    const toolEnd = toolEnds[0] as Extract<PiAgentEvent, { type: "tool_execution_end" }>;
+    expect(toolEnd.toolName).toBe("search_assets");
+    expect(toolEnd.isError).toBe(false);
   });
 });
 
@@ -876,7 +897,8 @@ describe("E2E-8: API Token Full Lifecycle", () => {
 
     const validated = await validateApiToken(db, result.rawToken);
     expect(validated).not.toBeNull();
-    expect(validated!.userId.toHexString()).toBe(userId.toHexString());
+    expect(validated?.userId).toBeDefined();
+    expect(validated!.userId!.toHexString()).toBe(userId.toHexString());
     expect(validated!.orgId.toHexString()).toBe(orgId.toHexString());
     expect(validated!.scope).toBe("write");
   });
@@ -931,7 +953,7 @@ describe("E2E-8: API Token Full Lifecycle", () => {
   it("creates team-scoped token", async () => {
     const result = await createApiToken(db, {
       name: `e2e-team-${MARKER}`,
-      tokenType: "team",
+      tokenType: "service_account",
       userId,
       orgId,
       teamId,
@@ -941,7 +963,7 @@ describe("E2E-8: API Token Full Lifecycle", () => {
     expect(result.rawToken.startsWith("ac_")).toBe(true);
 
     const doc = await db.collection("api_tokens").findOne({ _id: result.tokenId });
-    expect(doc!.tokenType).toBe("team");
+    expect(doc!.tokenType).toBe("service_account");
     expect(doc!.teamId!.toHexString()).toBe(teamId.toHexString());
   });
 

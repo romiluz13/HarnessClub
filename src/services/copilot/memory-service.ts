@@ -35,6 +35,11 @@ export interface StoredMessage {
   timestamp: string; // ISO string
 }
 
+export interface ConversationScope {
+  teamId: ObjectId;
+  userId: ObjectId;
+}
+
 const MAX_MESSAGES_PER_CONVERSATION = 50;
 const TTL_DAYS = 30;
 
@@ -67,7 +72,11 @@ export async function saveMessages(
   if (input.conversationId) {
     // Append to existing conversation, truncate to max
     await db.collection<ConversationDocument>("copilot_conversations").updateOne(
-      { _id: input.conversationId },
+      {
+        _id: input.conversationId,
+        teamId: input.teamId,
+        userId: input.userId,
+      },
       {
         $push: { messages: { $each: stored, $slice: -MAX_MESSAGES_PER_CONVERSATION } as never },
         $set: { updatedAt: now, expiresAt },
@@ -97,10 +106,14 @@ export async function saveMessages(
  */
 export async function loadConversation(
   db: Db,
-  conversationId: ObjectId
+  conversationId: ObjectId,
+  scope?: ConversationScope
 ): Promise<StoredMessage[]> {
   const doc = await db.collection<ConversationDocument>("copilot_conversations")
-    .findOne({ _id: conversationId });
+    .findOne({
+      _id: conversationId,
+      ...(scope ? { teamId: scope.teamId, userId: scope.userId } : {}),
+    });
   return doc?.messages ?? [];
 }
 

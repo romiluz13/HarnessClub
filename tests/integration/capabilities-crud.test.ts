@@ -224,7 +224,7 @@ describe("8.x Update Operators — Array", () => {
   it("8.6 $each + $push — push multiple tags at once", async () => {
     await db.collection("assets").updateOne(
       { _id: SKILL_IDS.graphqlAPI },
-      { $push: { tags: { $each: ["new-tag-1", "new-tag-2"] } } }
+      { $push: { tags: { $each: ["new-tag-1", "new-tag-2"] } } as never }
     );
     const doc = await db.collection("assets").findOne({ _id: SKILL_IDS.graphqlAPI });
     expect(doc!.tags).toContain("new-tag-1");
@@ -243,7 +243,7 @@ describe("8.x Update Operators — Array", () => {
     });
     await db.collection("activity").updateOne(
       { _id: bucketId },
-      { $push: { events: { $each: manyEvents, $slice: -10 } } }
+      { $push: { events: { $each: manyEvents, $slice: -10 } } as never }
     );
     const doc = await db.collection("activity").findOne({ _id: bucketId });
     expect(doc!.events.length).toBe(10);

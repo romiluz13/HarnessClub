@@ -5,7 +5,7 @@
  * Reviewers can approve/reject with comments. Shows version diff for review.
  */
 
-import { useState, useCallback, useEffect } from "react";
+import { useState, useCallback } from "react";
 import useSWR, { mutate } from "swr";
 import { CheckCircle, XCircle, Clock, Loader2, MessageSquare, GitCompareArrows } from "lucide-react";
 import { DiffViewer } from "@/components/diff-viewer";
@@ -36,24 +36,24 @@ export default function ApprovalsPage() {
   const [diffData, setDiffData] = useState<Record<string, VersionDiff | null>>({});
   const [diffLoading, setDiffLoading] = useState<string | null>(null);
 
-  // Fetch latest version diff when reviewing starts
-  useEffect(() => {
-    if (!reviewingId) return;
-    const approval = approvals.find((a) => a.id === reviewingId);
-    if (!approval || diffData[approval.assetId] !== undefined) return;
+  const startReview = useCallback(async (approval: ApprovalItem) => {
+    setReviewingId(approval.id);
+    if (diffData[approval.assetId] !== undefined) {
+      return;
+    }
 
     setDiffLoading(approval.assetId);
-    fetch(`/api/assets/${approval.assetId}/versions?limit=1&includeDiffs=true`)
-      .then((r) => r.json())
-      .then((data) => {
-        const latestDiff = data.versions?.[0]?.diff ?? null;
-        setDiffData((prev) => ({ ...prev, [approval.assetId]: latestDiff }));
-      })
-      .catch(() => {
-        setDiffData((prev) => ({ ...prev, [approval.assetId]: null }));
-      })
-      .finally(() => setDiffLoading(null));
-  }, [reviewingId, approvals, diffData]);
+    try {
+      const response = await fetch(`/api/assets/${approval.assetId}/versions?limit=1&includeDiffs=true`);
+      const payload = await response.json();
+      const latestDiff = payload.versions?.[0]?.diff ?? null;
+      setDiffData((prev) => ({ ...prev, [approval.assetId]: latestDiff }));
+    } catch {
+      setDiffData((prev) => ({ ...prev, [approval.assetId]: null }));
+    } finally {
+      setDiffLoading(null);
+    }
+  }, [diffData]);
 
   const handleAction = useCallback(async (approvalId: string, action: "approve" | "reject") => {
     setProcessing(true);
@@ -129,7 +129,7 @@ export default function ApprovalsPage() {
                           className="cursor-pointer rounded-lg bg-red-600 px-3 py-1.5 text-sm text-white hover:bg-red-700 disabled:opacity-50">Reject</button>
                       </>
                     ) : (
-                      <button type="button" onClick={() => setReviewingId(a.id)}
+                      <button type="button" onClick={() => void startReview(a)}
                         className="flex cursor-pointer items-center gap-1 rounded-lg border border-gray-200 px-3 py-1.5 text-sm text-gray-700 hover:bg-gray-50 dark:border-gray-700 dark:text-gray-300">
                         <MessageSquare className="h-3.5 w-3.5" /> Review
                       </button>

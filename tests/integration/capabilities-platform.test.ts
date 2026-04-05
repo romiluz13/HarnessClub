@@ -80,12 +80,12 @@ describe("13.x Platform Features", () => {
   it("13.16 Upserts — insert-or-update atomically", async () => {
     const f = { skillId: SKILL_IDS.reactHooks, teamId: TEAM_A_ID, date: new Date("2026-04-02") };
     const r1 = await db.collection("activity").updateOne(
-      f, { $setOnInsert: { createdAt: new Date(), [CAP_TEST_MARKER]: true }, $push: { events: { type: "view", ts: new Date() } } },
+      f, { $setOnInsert: { createdAt: new Date(), [CAP_TEST_MARKER]: true }, $push: { events: { type: "view", ts: new Date() } } as never },
       { upsert: true }
     );
     expect(r1.upsertedCount).toBe(1);
     const r2 = await db.collection("activity").updateOne(
-      f, { $setOnInsert: { createdAt: new Date("2099-01-01") }, $push: { events: { type: "install", ts: new Date() } } },
+      f, { $setOnInsert: { createdAt: new Date("2099-01-01") }, $push: { events: { type: "install", ts: new Date() } } as never },
       { upsert: true }
     );
     expect(r2.upsertedCount).toBe(0);

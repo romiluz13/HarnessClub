@@ -59,6 +59,10 @@ interface GlobalWithMongo {
 
 const globalWithMongo = globalThis as unknown as GlobalWithMongo;
 
+export function isMongoConfigured(): boolean {
+  return Boolean(process.env.MONGODB_URI);
+}
+
 function getClientPromise(): Promise<MongoClient> {
   if (globalWithMongo._mongoClientPromise) {
     return globalWithMongo._mongoClientPromise;

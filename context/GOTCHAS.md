@@ -2,6 +2,12 @@
 
 > Things that bit us. Read this before every task to avoid repeating mistakes.
 
+### Lazy DB client alone does not make Auth.js build-safe — Stabilization Wave 3
+**Symptom**: `next build` exits 0, but page-data collection logs repeated `MONGODB_URI` stack traces from auth/imported route modules even after `db.ts` was made lazy.
+**Root Cause**: `auth.ts` still invoked `MongoDBAdapter(getClientPromise())` at module scope, so importing the auth module eagerly touched the DB promise during build.
+**Fix**: Gate adapter/provider construction behind env checks (`isMongoConfigured()`, OAuth secret presence) and only validate external secrets inside real execution paths.
+**Prevention**: For any optional integration, make both the client factory and the consuming module initialization env-aware. Lazy infrastructure helpers are not enough if callers still instantiate adapters/providers at import time.
+
 ### Green Vitest can still hide broken product flows — Skeptical Audit (2026-04-05)
 **Symptom**: `bun run vitest run` passes, but lint/typecheck fail and core flows like create asset, SSO settings, member management RBAC, and approval review are still broken or insecure.
 **Root Cause**: The suite is strong on service/integration happy paths, but weak on UI/API contract alignment, negative authorization cases, and strict TypeScript/lint release gates.

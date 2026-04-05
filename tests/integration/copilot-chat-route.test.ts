@@ -46,6 +46,9 @@ async function loadRouteWithFaux(responses: ReturnType<typeof fauxAssistantMessa
 
   vi.doMock("@/lib/api-helpers", () => ({
     requireAuth: async () => ({ ok: true, userId: TEST_USER_ID.toHexString() }),
+    isTeamMember: async (_db: Db, userId: string, teamId: ObjectId) => (
+      userId === TEST_USER_ID.toHexString() && teamId.equals(TEST_TEAM_ID)
+    ),
   }));
   vi.doMock("@/lib/db", () => ({
     getDb: async () => db,

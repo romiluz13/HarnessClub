@@ -11,7 +11,7 @@
  */
 
 import { Agent, type AgentOptions, type BeforeToolCallContext, type BeforeToolCallResult } from "@mariozechner/pi-agent-core";
-import { getModel, streamSimple, type Message, type Model } from "@mariozechner/pi-ai";
+import { getModel, streamSimple, type Api, type Message, type Model } from "@mariozechner/pi-ai";
 import type { Db } from "mongodb";
 import { buildSystemPrompt } from "./context-builder";
 import {
@@ -125,7 +125,7 @@ export interface CreateAgentResult {
 
 export interface CreateCopilotAgentOptions {
   initialMessages?: Message[];
-  modelOverride?: Model<any>;
+  modelOverride?: Model<Api>;
   streamFn?: AgentOptions["streamFn"];
 }
 

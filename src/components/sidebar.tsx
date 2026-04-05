@@ -44,12 +44,10 @@ interface SidebarProps {
 
 export function Sidebar({ className = "" }: SidebarProps) {
   const pathname = usePathname();
-  const [collapsed, setCollapsed] = useState(false);
-
-  useEffect(() => {
-    const stored = localStorage.getItem(SIDEBAR_COLLAPSED_KEY);
-    if (stored === "true") setCollapsed(true);
-  }, []);
+  const [collapsed, setCollapsed] = useState(() => {
+    if (typeof window === "undefined") return false;
+    return window.localStorage.getItem(SIDEBAR_COLLAPSED_KEY) === "true";
+  });
 
   const toggleCollapse = useCallback(() => {
     setCollapsed((prev) => {
@@ -59,25 +57,26 @@ export function Sidebar({ className = "" }: SidebarProps) {
     });
   }, []);
 
-  // Keyboard shortcuts: Alt+1-4 for nav, Alt+B to toggle sidebar
-  useEffect(() => {
-    function handleKeyDown(e: KeyboardEvent) {
-      if (e.altKey && e.key === "b") {
+  const handleKeyDown = useCallback((e: KeyboardEvent) => {
+    if (e.altKey && e.key === "b") {
+      e.preventDefault();
+      toggleCollapse();
+      return;
+    }
+    if (e.altKey) {
+      const item = NAV_ITEMS.find((n) => n.shortcut === e.key);
+      if (item) {
         e.preventDefault();
-        toggleCollapse();
-        return;
-      }
-      if (e.altKey) {
-        const item = NAV_ITEMS.find((n) => n.shortcut === e.key);
-        if (item) {
-          e.preventDefault();
-          window.location.href = item.href;
-        }
+        window.location.href = item.href;
       }
     }
+  }, [toggleCollapse]);
+
+  // Keyboard shortcuts: Alt+1-6 for nav, Alt+B to toggle sidebar
+  useEffect(() => {
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [toggleCollapse]);
+  }, [handleKeyDown]);
 
   const isActive = (href: string) => {
     if (href === "/dashboard") return pathname === "/dashboard";

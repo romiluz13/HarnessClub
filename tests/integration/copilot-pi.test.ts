@@ -107,7 +107,7 @@ describe("Copilot Pi Agent — Faux LLM", () => {
 
     // Verify text deltas were streamed
     const textDeltas = events.filter(
-      (e) => e.type === "message_update" && "assistantMessageEvent" in e && (e as any).assistantMessageEvent.type === "text_delta"
+      (e): e is Extract<AgentEvent, { type: "message_update" }> => e.type === "message_update" && e.assistantMessageEvent.type === "text_delta"
     );
     expect(textDeltas.length).toBeGreaterThan(0);
   });
@@ -149,7 +149,9 @@ describe("Copilot Pi Agent — Faux LLM", () => {
     expect(toolEnd.isError).toBe(false);
 
     // Verify the tool result contains our test asset
-    const resultText = (toolEnd as any).result?.content?.[0]?.text ?? "";
+    const resultText = toolEnd.result?.content?.[0]?.type === "text"
+      ? toolEnd.result.content[0].text
+      : "";
     expect(resultText).toContain("Test Copilot Skill");
   });
 });

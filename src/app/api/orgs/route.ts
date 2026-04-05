@@ -122,16 +122,21 @@ export async function POST(request: NextRequest) {
 
   // 4. Update user memberships
   const now = new Date();
-  await db.collection("users").updateOne(
+  await db.collection<UserDocument>("users").updateOne(
     { _id: userId },
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     {
       $push: {
         orgMemberships: { orgId: orgResult.orgId, role: "org_owner", joinedAt: now },
         teamMemberships: { teamId: teamResult.insertedId, role: "owner", joinedAt: now },
       },
       $set: { updatedAt: now },
-    } as any,
+    } as {
+      $push: {
+        orgMemberships: NonNullable<UserDocument["orgMemberships"]>[number];
+        teamMemberships: UserDocument["teamMemberships"][number];
+      };
+      $set: Pick<UserDocument, "updatedAt">;
+    },
   );
 
   // 5. Audit log

@@ -119,13 +119,13 @@ describe("Onboarding — Full Org Setup", () => {
   });
 
   it("updates user memberships", async () => {
-    await db.collection("users").updateOne(
+    await db.collection<UserDocument>("users").updateOne(
       { _id: userId },
       {
         $push: {
           orgMemberships: { orgId, role: "org_owner", joinedAt: new Date() },
           teamMemberships: { teamId, role: "owner", joinedAt: new Date() },
-        } as Record<string, unknown>,
+        },
       },
     );
 

@@ -40,14 +40,14 @@ describe("SkillsList", () => {
   // ── Error State ────────────────────────────────────────────
   it("renders error state with message and retry", () => {
     mockSWR.mockReturnValue({ data: undefined, error: new Error("Network failure"), isLoading: false });
-    render(<SkillsList teamId="team-1" />);
+    render(<SkillsList />);
     expect(screen.getByText(/failed to load/i)).toBeInTheDocument();
   });
 
   // ── Loading State ──────────────────────────────────────────
   it("renders loading state with skeleton cards", () => {
     mockSWR.mockReturnValue({ data: undefined, error: undefined, isLoading: true });
-    render(<SkillsList teamId="team-1" />);
+    render(<SkillsList />);
     // Should show skeleton elements (animated placeholders)
     const skeletons = document.querySelectorAll("[class*='animate-pulse']");
     expect(skeletons.length).toBeGreaterThan(0);
@@ -56,41 +56,41 @@ describe("SkillsList", () => {
   // ── Empty State ────────────────────────────────────────────
   it("renders empty state with call-to-action", () => {
     mockSWR.mockReturnValue({ data: { skills: [], total: 0 }, error: undefined, isLoading: false });
-    render(<SkillsList teamId="team-1" />);
+    render(<SkillsList />);
     expect(screen.getByText(/no skills/i)).toBeInTheDocument();
   });
 
   // ── Success State ──────────────────────────────────────────
   it("renders skills cards with correct data", () => {
     mockSWR.mockReturnValue({ data: { skills: MOCK_SKILLS, total: 3 }, error: undefined, isLoading: false });
-    render(<SkillsList teamId="team-1" />);
+    render(<SkillsList />);
     expect(screen.getByText("React Hooks")).toBeInTheDocument();
     expect(screen.getByText("TypeScript Generics")).toBeInTheDocument();
   });
 
   it("shows install count and view count stats", () => {
     mockSWR.mockReturnValue({ data: { skills: MOCK_SKILLS, total: 3 }, error: undefined, isLoading: false });
-    render(<SkillsList teamId="team-1" />);
+    render(<SkillsList />);
     expect(screen.getByText("342")).toBeInTheDocument(); // installCount
   });
 
   it("renders tags as badges", () => {
     mockSWR.mockReturnValue({ data: { skills: MOCK_SKILLS, total: 3 }, error: undefined, isLoading: false });
-    render(<SkillsList teamId="team-1" />);
+    render(<SkillsList />);
     expect(screen.getByText("react")).toBeInTheDocument();
     expect(screen.getByText("hooks")).toBeInTheDocument();
   });
 
   it("shows draft badge for unpublished skills", () => {
     mockSWR.mockReturnValue({ data: { skills: MOCK_SKILLS, total: 3 }, error: undefined, isLoading: false });
-    render(<SkillsList teamId="team-1" />);
+    render(<SkillsList />);
     expect(screen.getByText("Draft")).toBeInTheDocument();
   });
 
   // ── Accessibility ──────────────────────────────────────────
   it("skill cards are clickable with cursor-pointer", () => {
     mockSWR.mockReturnValue({ data: { skills: MOCK_SKILLS, total: 3 }, error: undefined, isLoading: false });
-    render(<SkillsList teamId="team-1" />);
+    render(<SkillsList />);
     const links = screen.getAllByRole("link");
     links.forEach((link) => {
       // Links to skill detail pages should exist

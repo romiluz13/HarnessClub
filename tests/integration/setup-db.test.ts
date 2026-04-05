@@ -64,9 +64,12 @@ describe("setupDatabase — real Atlas", () => {
 
   it("$jsonSchema validator on assets collection has required fields", async () => {
     const db = await getTestDb();
-    const collInfo = await db.listCollections({ name: "assets" }).toArray();
-    expect(collInfo[0]).toBeDefined();
-    const options = collInfo[0].options;
+    const assetsCollection = await db.listCollections(
+      { name: "assets" },
+      { nameOnly: false }
+    ).toArray();
+    expect(assetsCollection[0]).toBeDefined();
+    const options = (assetsCollection[0] as { options?: { validator?: { $jsonSchema?: { required?: string[] } }; validationLevel?: string; validationAction?: string } }).options;
     expect(options?.validator?.$jsonSchema).toBeDefined();
     expect(options?.validator?.$jsonSchema?.required).toContain("type");
     expect(options?.validator?.$jsonSchema?.required).toContain("teamId");
@@ -78,8 +81,11 @@ describe("setupDatabase — real Atlas", () => {
 
   it("teams $jsonSchema validator has correct settings schema", async () => {
     const db = await getTestDb();
-    const collInfo = await db.listCollections({ name: "teams" }).toArray();
-    const schema = collInfo[0].options?.validator?.$jsonSchema;
+    const teamsCollection = await db.listCollections(
+      { name: "teams" },
+      { nameOnly: false }
+    ).toArray();
+    const schema = (teamsCollection[0] as { options?: { validator?: { $jsonSchema?: { properties?: { settings?: { required?: string[] } } } } } }).options?.validator?.$jsonSchema;
     expect(schema).toBeDefined();
     expect(schema?.properties?.settings?.required).toContain("marketplaceEnabled");
     expect(schema?.properties?.settings?.required).toContain("defaultRole");

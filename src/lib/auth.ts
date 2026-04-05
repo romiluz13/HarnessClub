@@ -12,7 +12,22 @@ import NextAuth from "next-auth";
 import GitHub from "next-auth/providers/github";
 import { MongoDBAdapter } from "@auth/mongodb-adapter";
 import { ObjectId } from "mongodb";
-import { getClientPromise, getDb } from "@/lib/db";
+import { getClientPromise, getDb, isMongoConfigured } from "@/lib/db";
+
+const hasGitHubOAuth = Boolean(process.env.GITHUB_CLIENT_ID && process.env.GITHUB_CLIENT_SECRET);
+const authAdapter = isMongoConfigured()
+  ? MongoDBAdapter(getClientPromise(), {
+    databaseName: process.env.MONGODB_DB_NAME || "skillshub",
+  })
+  : undefined;
+const authProviders = hasGitHubOAuth
+  ? [
+    GitHub({
+      clientId: process.env.GITHUB_CLIENT_ID!,
+      clientSecret: process.env.GITHUB_CLIENT_SECRET!,
+    }),
+  ]
+  : [];
 
 /**
  * Auth.js configuration with GitHub OAuth.
@@ -23,15 +38,8 @@ import { getClientPromise, getDb } from "@/lib/db";
  * Session is enriched with activeOrgId + activeTeamId from user's memberships.
  */
 export const { handlers, signIn, signOut, auth } = NextAuth({
-  adapter: MongoDBAdapter(getClientPromise(), {
-    databaseName: process.env.MONGODB_DB_NAME || "skillshub",
-  }),
-  providers: [
-    GitHub({
-      clientId: process.env.GITHUB_CLIENT_ID,
-      clientSecret: process.env.GITHUB_CLIENT_SECRET,
-    }),
-  ],
+  adapter: authAdapter,
+  providers: authProviders,
   session: {
     strategy: "jwt",
     maxAge: 30 * 24 * 60 * 60, // 30 days

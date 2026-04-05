@@ -69,7 +69,7 @@ export default function CreateAssetPage() {
     }
 
     const data = await res.json();
-    router.push(`/dashboard/skills/${data.id}`);
+    router.push(`/dashboard/assets/${data.id}`);
   }, [type, teamId, name, description, content, tags, router]);
 
   return (

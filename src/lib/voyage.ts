@@ -8,16 +8,16 @@
  * Per js-cache-function-results: Module-level cache for repeated lookups.
  */
 
-const VOYAGE_API_KEY = process.env.VOYAGE_API_KEY;
 const VOYAGE_API_URL = "https://api.voyageai.com/v1/embeddings";
 const VOYAGE_MODEL = "voyage-3-lite";
 export const EMBEDDING_DIMENSIONS = 512;
 
-if (!VOYAGE_API_KEY) {
-  console.warn(
-    "VOYAGE_API_KEY environment variable is not set. " +
-      "Semantic search will not work. Add it to .env.local."
-  );
+function getVoyageApiKey(): string {
+  const apiKey = process.env.VOYAGE_API_KEY;
+  if (!apiKey) {
+    throw new Error("VOYAGE_API_KEY is not configured");
+  }
+  return apiKey;
 }
 
 interface VoyageEmbeddingResponse {
@@ -44,9 +44,7 @@ export async function generateEmbeddings(
   texts: string[],
   inputType: "document" | "query" = "document"
 ): Promise<number[][]> {
-  if (!VOYAGE_API_KEY) {
-    throw new Error("VOYAGE_API_KEY is not configured");
-  }
+  const voyageApiKey = getVoyageApiKey();
 
   if (texts.length === 0) {
     return [];
@@ -63,7 +61,7 @@ export async function generateEmbeddings(
     method: "POST",
     headers: {
       "Content-Type": "application/json",
-      Authorization: `Bearer ${VOYAGE_API_KEY}`,
+      Authorization: `Bearer ${voyageApiKey}`,
     },
     body: JSON.stringify({
       model: VOYAGE_MODEL,

@@ -13,7 +13,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { ObjectId } from "mongodb";
 import { getDb } from "@/lib/db";
-import { requireAuth } from "@/lib/api-helpers";
+import { requireAuth, isTeamMember } from "@/lib/api-helpers";
+
 import { createCopilotAgent } from "@/services/copilot/pi-agent";
 import { generateSuggestions } from "@/services/copilot/context-builder";
 import { executeTool } from "@/services/copilot/tool-executor";
@@ -28,7 +29,7 @@ import type {
   CopilotMessage,
 } from "@/services/copilot/types";
 import type { AgentEvent } from "@mariozechner/pi-agent-core";
-import type { AssistantMessageEvent, Message as PiMessage, Model as PiModel, Usage } from "@mariozechner/pi-ai";
+import type { Api, AssistantMessageEvent, Message as PiMessage, Usage } from "@mariozechner/pi-ai";
 
 const EMPTY_USAGE: Usage = {
   input: 0,
@@ -60,12 +61,20 @@ export async function POST(request: NextRequest) {
 
   const db = await getDb();
   const userId = new ObjectId(authResult.userId);
+  const activeTeamId = await resolveAuthorizedTeamId(db, authResult.userId, body.context.teamId);
+  if (!activeTeamId) {
+    return NextResponse.json({ error: "A valid active team is required for copilot chat" }, { status: 403 });
+  }
+  const context: CopilotContext = { ...body.context, teamId: activeTeamId.toHexString() };
 
   // Load conversation history if conversationId provided
   const conversationId = body.conversationId;
   let history: CopilotMessage[] = [];
   if (conversationId && ObjectId.isValid(conversationId)) {
-    const stored = await loadConversation(db, new ObjectId(conversationId));
+    const stored = await loadConversation(db, new ObjectId(conversationId), {
+      teamId: activeTeamId,
+      userId,
+    });
     history = stored.map((m) => ({
       role: m.role,
       content: m.content,
@@ -76,13 +85,13 @@ export async function POST(request: NextRequest) {
   }
 
   const historyMessages = resolveHistoryMessages(body.history, history);
-  const { agent, hasLlm } = createCopilotAgent(db, body.context, {
+  const { agent, hasLlm } = createCopilotAgent(db, context, {
     initialMessages: undefined,
   });
 
   // If no LLM configured, fall back to intent-based dispatch (no streaming)
   if (!hasLlm) {
-    return handleFallback(db, body, userId, conversationId ? new ObjectId(conversationId) : undefined);
+    return handleFallback(db, context, body.message, userId, activeTeamId, conversationId ? new ObjectId(conversationId) : undefined);
   }
 
   // SSE streaming response
@@ -94,9 +103,12 @@ export async function POST(request: NextRequest) {
       }
 
       const startingMessageCount = historyMessages.length;
+      if (!agent.state.model) {
+        throw new Error("Copilot model is unavailable for streaming mode");
+      }
       agent.state.messages = toAgentMessages(historyMessages, agent.state.model);
 
-      agent.subscribe((event: AgentEvent, _signal: AbortSignal) => {
+      agent.subscribe((event: AgentEvent) => {
         switch (event.type) {
           case "agent_start":
             send("agent_start", {});
@@ -124,12 +136,9 @@ export async function POST(request: NextRequest) {
         const transcript = toCopilotMessages(newMessages);
         const outcome = extractLiveOutcome(newMessages);
         const parsed = parseActionBlocks(outcome.message);
-        const teamId = body.context.teamId ? new ObjectId(body.context.teamId) : new ObjectId();
-        const proactive = body.context.teamId
-          ? await generateProactiveSuggestions(db, new ObjectId(body.context.teamId))
-          : [];
+        const proactive = await generateProactiveSuggestions(db, activeTeamId);
         const convId = await saveMessages(db, {
-          teamId,
+          teamId: activeTeamId,
           userId,
           conversationId: conversationId && ObjectId.isValid(conversationId) ? new ObjectId(conversationId) : undefined,
           messages: transcript,
@@ -142,7 +151,7 @@ export async function POST(request: NextRequest) {
         send("agent_end", {
           message: parsed.text || outcome.message,
           toolsUsed: outcome.toolsUsed,
-          suggestions: generateSuggestions(body.context),
+          suggestions: generateSuggestions(context),
           conversationId: convId.toHexString(),
           actions: parsed.actions,
           proactiveSuggestions: proactive.slice(0, 3),
@@ -175,7 +184,13 @@ function toTextContent(text: string) {
   return [{ type: "text" as const, text }];
 }
 
-function toAgentMessages(history: CopilotMessage[], model: PiModel<any>): PiMessage[] {
+type PiAssistantIdentity = {
+  api: Api;
+  provider: Extract<PiMessage, { role: "assistant" }>["provider"];
+  id: string;
+};
+
+function toAgentMessages(history: CopilotMessage[], model: PiAssistantIdentity): PiMessage[] {
   return history.map((message, index) => {
     const timestamp = message.timestamp.getTime();
 
@@ -317,24 +332,26 @@ function extractLiveOutcome(messages: PiMessage[]): { message: string; toolsUsed
 
 async function handleFallback(
   db: Awaited<ReturnType<typeof getDb>>,
-  body: CopilotChatRequest,
+  context: CopilotContext,
+  message: string,
   userId: ObjectId,
+  teamId: ObjectId,
   existingConversationId?: ObjectId
 ): Promise<NextResponse> {
   const toolsUsed: CopilotToolName[] = [];
   let responseMessage = "";
 
-  const intent = detectIntent(body.message, body.context);
+  const intent = detectIntent(message, context);
   if (intent) {
     try {
-      const result = await executeTool(db, intent.tool, intent.params as never, body.context);
+      const result = await executeTool(db, intent.tool, intent.params as never, context);
       toolsUsed.push(intent.tool);
       responseMessage = formatToolResult(intent.tool, result as Record<string, unknown>);
     } catch (err: unknown) {
       responseMessage = `I tried to use the ${intent.tool} tool but encountered an error: ${(err as Error).message}`;
     }
   } else {
-    const suggestions = generateSuggestions(body.context);
+    const suggestions = generateSuggestions(context);
     responseMessage = `I can help you with agent configurations! Here are some things I can do:\n\n${suggestions.map((s) => `- ${s}`).join("\n")}`;
   }
 
@@ -342,10 +359,9 @@ async function handleFallback(
   const parsed = parseActionBlocks(responseMessage);
 
   // Save conversation (fire-and-forget)
-  const teamId = body.context.teamId ? new ObjectId(body.context.teamId) : new ObjectId();
   const now = new Date();
   const newMessages: CopilotMessage[] = [
-    { role: "user", content: body.message, timestamp: now },
+    { role: "user", content: message, timestamp: now },
     { role: "assistant", content: responseMessage, timestamp: now },
   ];
   const convId = await saveMessages(db, {
@@ -356,14 +372,12 @@ async function handleFallback(
   });
 
   // Get proactive suggestions
-  const proactive = body.context.teamId
-    ? await generateProactiveSuggestions(db, new ObjectId(body.context.teamId))
-    : [];
+  const proactive = await generateProactiveSuggestions(db, teamId);
 
   const response: CopilotChatResponse = {
     message: parsed.text || responseMessage,
     toolsUsed,
-    suggestions: generateSuggestions(body.context),
+    suggestions: generateSuggestions(context),
   };
 
   return NextResponse.json({
@@ -372,6 +386,27 @@ async function handleFallback(
     actions: parsed.actions,
     proactiveSuggestions: proactive.slice(0, 3),
   });
+}
+
+async function resolveAuthorizedTeamId(
+  db: Awaited<ReturnType<typeof getDb>>,
+  userId: string,
+  requestedTeamId?: string
+): Promise<ObjectId | null> {
+  if (requestedTeamId && ObjectId.isValid(requestedTeamId)) {
+    const requested = new ObjectId(requestedTeamId);
+    if (await isTeamMember(db, userId, requested)) {
+      return requested;
+    }
+    return null;
+  }
+
+  const user = await db.collection("users").findOne(
+    { _id: new ObjectId(userId) },
+    { projection: { teamMemberships: 1 } }
+  );
+
+  return user?.teamMemberships?.[0]?.teamId ?? null;
 }
 
 function detectIntent(message: string, context: CopilotContext): {

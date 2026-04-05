@@ -2,6 +2,27 @@
 
 ## Current State
 
+## 2026-04-05: Stabilization Wave 3 — Green Gates + Clean Build Truth
+
+### What Was Fixed
+- Cleared the remaining global TypeScript failure by typing the Atlas search integration pipeline as `aggregate<SearchMatch>()` instead of returning raw `Document` values.
+- Updated the copilot chat route integration test to mock `isTeamMember()` explicitly, matching the stricter team-scoped conversation authorization path.
+- Made Auth.js initialization env-aware: `auth.ts` now only constructs the Mongo adapter when Mongo is configured and only registers the GitHub provider when OAuth secrets are present.
+- Exported `isMongoConfigured()` from `src/lib/db.ts` so server-only integrations can avoid module-scope DB setup when envs are absent during `next build`.
+- Removed import-time Voyage warnings and switched the embedding client to validate `VOYAGE_API_KEY` only when an embedding request is actually made.
+- Migrated the deprecated Next.js `middleware` file convention to `src/proxy.ts`, preserving security headers and per-tier rate limiting without the deprecation warning.
+- Cleaned the SearchBar escape-key test so the suite no longer emits React `act(...)` warnings during verification.
+
+### Verification
+- `npx tsc --noEmit` ✅
+- `npm run lint` ✅ (0 errors, warnings remain)
+- `npm run test` ✅ 519 passed, 2 skipped
+- `npm run build` ✅ clean build output with no repeated `MONGODB_URI`/`VOYAGE_API_KEY` stack traces
+
+### What This Means
+- The repo is back to a credible engineering baseline: typecheck, lint, tests, and build all pass together, and the build log is now honest instead of succeeding with hidden runtime-initialization noise.
+- The highest-value remaining product hardening work is now the deeper production plan items rather than release-discipline cleanup: context spine completion, approval/release enforcement, placeholder ownership removal, distributed rate limiting, and the remaining warning cleanup.
+
 ## 2026-04-05: Stabilization Wave 2 — Team Management + Token Ownership + Create Flow + Extension Bootstrap
 
 ### What Was Fixed
