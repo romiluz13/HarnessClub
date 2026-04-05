@@ -2,6 +2,12 @@
 
 > Patterns discovered and validated during development. Use these — don't reinvent.
 
+### Atlas Local Preview as the OSS Truth Lane (2026-04-05)
+**When**: Validating search-heavy or zero-mock integration flows locally for an Atlas-dependent feature set.
+**How**: Use `docker-compose.atlas-local.yml`, wait for the container health check, then run the real test matrix against `mongodb://localhost:27018/?directConnection=true` from `.env.test` so global setup can create validators, search indexes, vector indexes, and the persistent search fixture.
+**Why**: Plain Mongo fallback is useful for degraded behavior, but Atlas Local Preview is the realistic local lane for verifying `$search`, `$vectorSearch`, and native `$rankFusion` before claiming OSS/self-hosted readiness.
+**Files**: `docker-compose.atlas-local.yml`, `tests/helpers/global-setup.ts`, `tests/integration/search-hybrid.test.ts`, `tests/integration/e2e-onboarding.test.ts`, `tests/integration/e2e-platform.test.ts`
+
 ### Env-Gated Optional Integration Initialization (2026-04-05)
 **When**: A module is imported during `next build`, but some integrations are only valid when deploy-time secrets are present (Auth.js adapters/providers, Voyage client, similar SDKs).
 **How**: Export a tiny capability guard like `isMongoConfigured()`, build adapters/providers conditionally, and validate secrets inside the actual request/execution path instead of logging or throwing at module scope.

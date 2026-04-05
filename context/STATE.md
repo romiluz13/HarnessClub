@@ -2,6 +2,29 @@
 
 ## Current State
 
+## 2026-04-05: Atlas Local Preview Reality Pass — Zero-Mock Validation
+
+### What Was Verified
+- Reset the local Atlas preview Docker stack to a fresh volume, then brought `mongodb/mongodb-atlas-local:preview` back up until the container reported `healthy`.
+- Re-ran the real Atlas Search/Vector Search setup path through Vitest global setup against `mongodb://localhost:27018/?directConnection=true` using the repo’s `.env.test` config.
+- Verified native Atlas-local search behavior, including real `assets_search` + `assets_vector` readiness, a live Voyage embedding for the persistent fixture, and native `$rankFusion` execution in the hybrid search suite.
+- Ran zero-mock end-to-end onboarding and platform lifecycle suites against Atlas Local Preview, exercising real org/team/asset/approval/SSO/webhook/token/service flows with MongoDB persistence.
+- Re-ran the full engineering gate matrix with Atlas Local Preview active: `tsc`, `eslint`, full `vitest`, and `next build`.
+
+### Verification
+- `docker compose -f docker-compose.atlas-local.yml up -d` ✅ after resetting the stack volume
+- `npx vitest run tests/integration/search-hybrid.test.ts` ✅ 11/11 passing on Atlas Local Preview, including native `$rankFusion`
+- `npx vitest run tests/integration/e2e-onboarding.test.ts tests/integration/e2e-platform.test.ts` ✅ 60/60 passing
+- `npm run test` ✅ 519 passed, 2 skipped (the two skipped tests are the live copilot suites gated by missing `COPILOT_*` env vars in `.env.test`)
+- `npx tsc --noEmit` ✅
+- `npm run lint` ✅ 0 errors, 51 warnings remain
+- `npm run build` ✅ clean production build while Atlas Local Preview was available
+
+### What This Means
+- The app now has a validated “serious local dev / OSS” lane, not just a plain Mongo fallback story: Atlas Local Preview successfully exercised real Search + Vector Search behavior with live fixture indexing and zero-mock E2E service coverage.
+- The remaining blockers are not Atlas-local incompatibilities; they are product-hardening items already known from the broader production plan: release-state enforcement, distributed rate limiting, SSO secret encryption-at-rest, warning cleanup, and optional live copilot configuration for full external-model validation.
+- Atlas Local Preview currently follows the repo’s manual-embedding path (`AutoEmbed index not available (M0/local mode — using manual embeddings)`), so local preview is validated for hybrid search realism but not yet for a true auto-embedding runtime path.
+
 ## 2026-04-05: Stabilization Wave 3 — Green Gates + Clean Build Truth
 
 ### What Was Fixed

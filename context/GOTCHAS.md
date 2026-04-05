@@ -2,6 +2,12 @@
 
 > Things that bit us. Read this before every task to avoid repeating mistakes.
 
+### Atlas Local Preview can get stuck in a bad startup state after prior failures — 2026-04-05
+**Symptom**: The Atlas Local Preview container starts but the app/test connection to `localhost:27018` is refused or the internal runner reports replica-state / primary-readiness issues before reaching healthy.
+**Root Cause**: A stale local Atlas preview volume or partially initialized replica state can survive a failed boot and keep the next startup from converging cleanly.
+**Fix**: Reset the stack with `docker compose -f docker-compose.atlas-local.yml down -v`, then bring it back up and wait for the health check to report `healthy` before running tests.
+**Prevention**: Treat Atlas Local Preview as a real stateful service. If startup looks inconsistent, reset the volume and verify health before assuming the app/test layer is broken.
+
 ### Lazy DB client alone does not make Auth.js build-safe — Stabilization Wave 3
 **Symptom**: `next build` exits 0, but page-data collection logs repeated `MONGODB_URI` stack traces from auth/imported route modules even after `db.ts` was made lazy.
 **Root Cause**: `auth.ts` still invoked `MongoDBAdapter(getClientPromise())` at module scope, so importing the auth module eagerly touched the DB promise during build.
