@@ -1,0 +1,2 @@
+Cannot connect to the Docker daemon at unix:///Users/rom.iluz/.docker/run/docker.sock. Is the docker daemon running?
+DOCKER_EXIT=1

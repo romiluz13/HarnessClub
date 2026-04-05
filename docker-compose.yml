@@ -1,0 +1,56 @@
+# AgentConfig — Docker Compose for local development
+#
+# Usage:
+#   cp .env.example .env        # Fill in required values
+#   docker compose up            # Start MongoDB + Next.js app
+#   docker compose down -v       # Stop and remove volumes
+#
+# Services:
+#   - mongo: MongoDB 7.0 on port 27017
+#   - app: Next.js 15 on port 3000
+
+services:
+  mongo:
+    image: mongo:7
+    container_name: agentconfig-mongo
+    restart: unless-stopped
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongo-data:/data/db
+    environment:
+      MONGO_INITDB_DATABASE: agentconfig
+    healthcheck:
+      test: ["CMD", "mongosh", "--eval", "db.adminCommand('ping')"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: agentconfig-app
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    depends_on:
+      mongo:
+        condition: service_healthy
+    env_file:
+      - .env
+    environment:
+      # Override MONGODB_URI to use the Docker network hostname
+      MONGODB_URI: mongodb://mongo:27017/agentconfig
+      NODE_ENV: production
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3000/api/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
+
+volumes:
+  mongo-data:
+    driver: local

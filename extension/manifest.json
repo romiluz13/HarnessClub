@@ -1,0 +1,34 @@
+{
+  "manifest_version": 3,
+  "name": "AgentConfig — Save to Team",
+  "version": "1.0.0",
+  "description": "Save AI agent configs (CLAUDE.md, .cursorrules, skills, MCP configs) to your AgentConfig team with one click.",
+  "permissions": [
+    "activeTab",
+    "storage"
+  ],
+  "host_permissions": [
+    "https://github.com/*",
+    "https://raw.githubusercontent.com/*",
+    "https://skills.sh/*"
+  ],
+  "optional_host_permissions": [
+    "https://*/*",
+    "http://localhost/*",
+    "http://127.0.0.1/*"
+  ],
+  "action": {
+    "default_popup": "popup.html"
+  },
+  "content_scripts": [
+    {
+      "matches": ["https://github.com/*"],
+      "js": ["content.js"],
+      "run_at": "document_idle"
+    }
+  ],
+  "background": {
+    "service_worker": "background.js",
+    "type": "module"
+  }
+}

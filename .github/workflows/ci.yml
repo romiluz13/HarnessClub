@@ -1,0 +1,72 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    name: Typecheck + Lint + Build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: TypeScript check
+        run: npx tsc --noEmit
+
+      - name: Wiring audit
+        run: node scripts/wiring-audit.mjs
+
+      - name: Build
+        run: npm run build
+        env:
+          # Dummy values for build (no runtime needed)
+          MONGODB_URI: mongodb://localhost:27017/agentconfig
+          NEXTAUTH_SECRET: ci-build-secret-not-real
+          NEXTAUTH_URL: http://localhost:3000
+
+  test:
+    name: Tests
+    runs-on: ubuntu-latest
+    services:
+      mongo:
+        image: mongo:7
+        ports:
+          - 27017:27017
+        options: >-
+          --health-cmd "mongosh --eval 'db.adminCommand({ping:1})'"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run tests
+        run: npx vitest run --reporter=verbose
+        env:
+          MONGODB_URI: mongodb://localhost:27017/agentconfig-test
+          NEXTAUTH_SECRET: ci-test-secret-not-real
+          NEXTAUTH_URL: http://localhost:3000

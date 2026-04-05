@@ -1,0 +1,34 @@
+# Docker Compose for mongodb-atlas-local:preview
+#
+# Provides mongod + mongot (Atlas Search + Vector Search) locally.
+# The :preview tag includes preview features like $rankFusion and $scoreFusion.
+# Ref: https://hub.docker.com/r/mongodb/mongodb-atlas-local
+#
+# Usage:
+#   docker compose -f docker-compose.atlas-local.yml up -d
+#   # Wait for healthy status:
+#   docker compose -f docker-compose.atlas-local.yml ps
+#   # Run hybrid search tests against local Atlas:
+#   ATLAS_LOCAL_URI=mongodb://localhost:27018/?directConnection=true bun test tests/integration/search-hybrid.test.ts
+#   # Tear down:
+#   docker compose -f docker-compose.atlas-local.yml down -v
+
+services:
+  atlas-local:
+    image: mongodb/mongodb-atlas-local:preview
+    container_name: skillshub-atlas-local
+    ports:
+      - "27018:27017"
+    environment:
+      - MONGODB_INITDB_DATABASE=skillshub_test
+    healthcheck:
+      test: ["CMD", "mongosh", "--eval", "db.runCommand('ping').ok", "--quiet"]
+      interval: 5s
+      timeout: 10s
+      retries: 20
+      start_period: 30s
+    volumes:
+      - atlas-local-data:/data/db
+
+volumes:
+  atlas-local-data:

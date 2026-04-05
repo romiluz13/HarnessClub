@@ -1,0 +1,127 @@
+[dotenv@17.3.1] injecting env (5) from .env.test -- tip: ⚙️  specify custom .env file path with { path: '/custom/path/.env' }
+
+ RUN  v4.1.2 /Users/rom.iluz/Dev/skills-hub
+
+[dotenv@17.3.1] injecting env (0) from .env.test -- tip: 🔐 encrypt with Dotenvx: https://dotenvx.com
+[global-setup] Running setupDatabase()...
+[global-setup] Database setup complete.
+[global-setup] Waiting for search indexes to reach READY...
+[global-setup] Search index status: skills_search=PENDING, skills_vector=READY
+[global-setup] All search indexes READY: skills_search, skills_vector
+[global-setup] Search fixture already exists.
+[global-setup] Verifying fixture is in Atlas Search index...
+[global-setup] Atlas Search fixture verified — ready for tests!
+ ✓ tests/services/github-import.test.ts > importFromGitHub > imports a real SKILL.md from a public repo 2124ms
+ ✓ tests/services/github-import.test.ts > importFromGitHub > returns error for invalid GitHub URL 17ms
+ ✓ tests/services/github-import.test.ts > importFromGitHub > returns error for nonexistent repo 839ms
+ ✓ tests/services/github-import.test.ts > importFromGitHub > handles owner/repo shorthand format 685ms
+ ✓ tests/services/github-import.test.ts > importFromGitHub > writes correct metadata to the skill document 714ms
+ ✓ tests/integration/search-hybrid.test.ts > Hybrid Search — real Atlas M0 > RRF merges two result lists correctly 1ms
+ ✓ tests/integration/search-hybrid.test.ts > Hybrid Search — real Atlas M0 > RRF respects limit 0ms
+ ✓ tests/integration/search-hybrid.test.ts > Hybrid Search — real Atlas M0 > RRF handles empty lists 0ms
+ ✓ tests/integration/search-hybrid.test.ts > Hybrid Search — real Atlas M0 > RRF merges highlights from both lists 0ms
+ ✓ tests/integration/search-hybrid.test.ts > Hybrid Search — real Atlas M0 > hybridSearch returns results for the search fixture (mode=hybrid) 694ms
+ ✓ tests/integration/search-hybrid.test.ts > Hybrid Search — real Atlas M0 > hybridSearch mode=lexical delegates to lexicalSearch only 19ms
+ ✓ tests/integration/search-hybrid.test.ts > Hybrid Search — real Atlas M0 > hybridSearch mode=semantic delegates to semanticSearch only 288ms
+ ✓ tests/integration/search-hybrid.test.ts > Hybrid Search — real Atlas M0 > hybridSearch returns low-score results for non-matching query 634ms
+ ✓ tests/integration/search-hybrid.test.ts > Hybrid Search — real Atlas M0 > hybridSearch respects team isolation — wrong teamId returns no results 308ms
+ ✓ tests/integration/search-hybrid.test.ts > Hybrid Search — real Atlas M0 > $rankFusion works natively on atlas-local:preview (8.2+) 382ms
+ ✓ tests/integration/search-hybrid.test.ts > Hybrid Search — real Atlas M0 > hybridSearch results have correct shape 385ms
+ ✓ tests/integration/capabilities-platform.test.ts > 12.x Index Types > 12.5 TTL Index — auto-expire documents 41ms
+ ✓ tests/integration/capabilities-platform.test.ts > 12.x Index Types > 12.6 Partial Index — only published skills 123ms
+ ✓ tests/integration/capabilities-platform.test.ts > 12.x Index Types > 12.12 Collation Index — case-insensitive 139ms
+ ✓ tests/integration/capabilities-platform.test.ts > 13.x Platform Features > 13.1 Transactions — atomic multi-doc 21ms
+ ✓ tests/integration/capabilities-platform.test.ts > 13.x Platform Features > 13.16 Upserts — insert-or-update atomically 6ms
+ ✓ tests/integration/capabilities-platform.test.ts > 13.x Platform Features > 13.19 Explain — query plan 4ms
+ ✓ tests/integration/capabilities-platform.test.ts > 13.x Platform Features > 13.17 bulkWrite — batched updates 3ms
+ ✓ tests/integration/capabilities-platform.test.ts > 13.x Platform Features > 1.2+1.8 insertMany+deleteMany 7ms
+ ✓ tests/integration/capabilities-platform.test.ts > 13.x Platform Features > 13.10 Collation sort 10ms
+ ✓ tests/integration/capabilities-platform.test.ts > 13.x Platform Features > 13.7/13.8 Read+Write Concern majority 5ms
+ ✓ tests/integration/capabilities-agg.test.ts > 9.x Aggregation — Core Stages > 9.3 $group — total installs by team 4ms
+ ✓ tests/integration/capabilities-agg.test.ts > 9.x Aggregation — Core Stages > 9.7 $unwind — flatten tags for tag cloud 2ms
+ ✓ tests/integration/capabilities-agg.test.ts > 9.x Aggregation — Core Stages > 9.8 $lookup — join skills with teams 1ms
+ ✓ tests/integration/capabilities-agg.test.ts > 9.x Aggregation — Core Stages > 9.6 $skip + 9.5 $limit — offset pagination 3ms
+ ✓ tests/integration/capabilities-agg.test.ts > 9.x Aggregation — Core Stages > 9.9 $addFields — computed isPopular flag 2ms
+ ✓ tests/integration/capabilities-agg.test.ts > 9.x Aggregation — Core Stages > 9.11 $count — total matching 1ms
+ ✓ tests/integration/capabilities-agg.test.ts > 9.x Aggregation — Core Stages > 9.12 $sample — random skills 1ms
+ ✓ tests/integration/capabilities-agg.test.ts > 9.x Aggregation — Core Stages > 9.17 $sortByCount — most popular tags 1ms
+ ✓ tests/integration/capabilities-agg.test.ts > 10.x Aggregation — Advanced Stages > 10.1 $facet — results + tag counts + total in one query 1ms
+ ✓ tests/integration/capabilities-agg.test.ts > 10.x Aggregation — Advanced Stages > 10.2 $bucket — install count histogram 1ms
+ ✓ tests/integration/capabilities-agg.test.ts > 10.x Aggregation — Advanced Stages > 10.4 $graphLookup — skill dependency tree 1ms
+ ✓ tests/integration/capabilities-agg.test.ts > 10.x Aggregation — Advanced Stages > 10.7 $setWindowFields — running install total + rank 1ms
+ ✓ tests/integration/capabilities-agg.test.ts > 10.x Aggregation — Advanced Stages > 9.15 $merge — materialized view of published skills 9ms
+ ✓ tests/integration/capabilities-agg.test.ts > 15.x Aggregation Expressions > 15.1/15.2 $sum/$avg/$max/$min — team stats 1ms
+ ✓ tests/integration/capabilities-agg.test.ts > 15.x Aggregation Expressions > 15.6 $filter — filter memberships by role 1ms
+ ✓ tests/integration/capabilities-agg.test.ts > 15.x Aggregation Expressions > 15.7 $map — extract names from embedded array 1ms
+ ✓ tests/integration/capabilities-agg.test.ts > 15.x Aggregation Expressions > 15.10 $cond — conditional labels 1ms
+ ✓ tests/integration/capabilities-agg.test.ts > 15.x Aggregation Expressions > 15.12 $dateToString — group skills by month 1ms
+ ✓ tests/integration/capabilities-agg.test.ts > 15.x Aggregation Expressions > 15.15 $ifNull — default for missing fields 1ms
+ ✓ tests/integration/embedding.test.ts > Voyage AI Embeddings — real API > generates a real embedding from Voyage AI 630ms
+ ✓ tests/integration/embedding.test.ts > Voyage AI Embeddings — real API > embedSkill writes embedding to an existing skill document 338ms
+ ✓ tests/integration/capabilities-crud.test.ts > 1.x CRUD Operations > 1.3 findOne — find team by slug 4ms
+ ✓ tests/integration/capabilities-crud.test.ts > 1.x CRUD Operations > 1.4 find — list skills for team 8ms
+ ✓ tests/integration/capabilities-crud.test.ts > 1.x CRUD Operations > 1.11 findOneAndUpdate — atomic increment + return 5ms
+ ✓ tests/integration/capabilities-crud.test.ts > 1.x CRUD Operations > 1.14 countDocuments — count published skills for team 2ms
+ ✓ tests/integration/capabilities-crud.test.ts > 1.x CRUD Operations > 1.15 estimatedDocumentCount — fast approximate count 1ms
+ ✓ tests/integration/capabilities-crud.test.ts > 1.x CRUD Operations > 1.16 distinct — get all unique tags 2ms
+ ✓ tests/integration/capabilities-crud.test.ts > 2.x Query Operators — Comparison > 2.3 $gt — skills with > 300 installs 2ms
+ ✓ tests/integration/capabilities-crud.test.ts > 2.x Query Operators — Comparison > 2.5 $in — skills matching multiple tags 1ms
+ ✓ tests/integration/capabilities-crud.test.ts > 2.x Query Operators — Comparison > 2.2 $ne — exclude unpublished skills 2ms
+ ✓ tests/integration/capabilities-crud.test.ts > 3.x Query Operators — Logical > 3.2 $or — search name OR description 1ms
+ ✓ tests/integration/capabilities-crud.test.ts > 4.x Query Operators — Element > 4.1 $exists — skills with parentSkillId 1ms
+ ✓ tests/integration/capabilities-crud.test.ts > 5.x Query Operators — Evaluation > 5.1 $expr — skills where viewCount > installCount * 5 1ms
+ ✓ tests/integration/capabilities-crud.test.ts > 6.x Query Operators — Array > 6.1 $all — skills with ALL specified tags 1ms
+ ✓ tests/integration/capabilities-crud.test.ts > 6.x Query Operators — Array > 6.2 $elemMatch — user membership for specific team+role 1ms
+ ✓ tests/integration/capabilities-crud.test.ts > 7.x Update Operators — Field > 7.3 $inc — atomic increment viewCount 4ms
+ ✓ tests/integration/capabilities-crud.test.ts > 7.x Update Operators — Field > 7.2 $unset — remove optional field 5ms
+ ✓ tests/integration/capabilities-crud.test.ts > 7.x Update Operators — Field > 7.8 $setOnInsert — set field only on upsert insert 4ms
+ ✓ tests/integration/capabilities-crud.test.ts > 7.x Update Operators — Field > 7.9 $currentDate — server-side timestamp 3ms
+ ✓ tests/integration/capabilities-crud.test.ts > 8.x Update Operators — Array > 8.6 $each + $push — push multiple tags at once 4ms
+ ✓ tests/integration/capabilities-crud.test.ts > 8.x Update Operators — Array > 8.8 $slice — cap array size after push 6ms
+ ✓ tests/integration/capabilities-crud.test.ts > 8.x Update Operators — Array > 8.12 $[<identifier>] — filtered positional update 2ms
+ ✓ tests/integration/search.test.ts > Search Pipeline — real Atlas > embedding was stored correctly 25ms
+ ✓ tests/integration/search.test.ts > Search Pipeline — real Atlas > $vectorSearch finds the skill by semantic similarity 11ms
+ ✓ tests/integration/search.test.ts > Search Pipeline — real Atlas > $search lexical finds the skill by text match 8ms
+ ✓ tests/integration/setup-db.test.ts > setupDatabase — real Atlas > runs setupDatabase without error 77ms
+ ✓ tests/integration/setup-db.test.ts > setupDatabase — real Atlas > creates skills, teams, users, activity collections 2ms
+ ✓ tests/integration/setup-db.test.ts > setupDatabase — real Atlas > skills collection has expected indexes 2ms
+ ✓ tests/integration/setup-db.test.ts > setupDatabase — real Atlas > teams collection has slug_unique and member_lookup indexes 1ms
+ ✓ tests/integration/setup-db.test.ts > setupDatabase — real Atlas > users collection has email_unique and auth_provider_unique indexes 1ms
+ ✓ tests/integration/setup-db.test.ts > setupDatabase — real Atlas > activity collection has skill_date and team_date indexes 1ms
+ ✓ tests/integration/setup-db.test.ts > setupDatabase — real Atlas > $jsonSchema validator rejects invalid skill (missing required fields) 1ms
+ ✓ tests/integration/setup-db.test.ts > setupDatabase — real Atlas > teams $jsonSchema validator has correct settings schema 1ms
+ ✓ tests/integration/setup-db.test.ts > setupDatabase — real Atlas > is idempotent — running twice does not throw 41ms
+ ✓ tests/services/team-service.test.ts > createTeam > creates team and adds owner membership 20ms
+ ✓ tests/services/team-service.test.ts > addTeamMember / removeTeamMember > adds a member to team and user 15ms
+ ✓ tests/services/team-service.test.ts > addTeamMember / removeTeamMember > removes a member from team and user 15ms
+ ✓ tests/services/team-service.test.ts > updateMemberRole > updates a member role in their membership 15ms
+ ✓ tests/services/team-service.test.ts > getTeamBySlug > returns team by slug 8ms
+ ✓ tests/services/team-service.test.ts > getTeamBySlug > returns null for nonexistent slug 3ms
+ ✓ tests/services/team-service.test.ts > getUserTeams > returns all teams the user belongs to 13ms
+ ✓ tests/services/team-service.test.ts > getUserTeams > returns empty array for user with no teams 4ms
+ ✓ tests/services/team-service.test.ts > generateUniqueSlug > generates a clean slug from name 3ms
+ ✓ tests/services/team-service.test.ts > generateUniqueSlug > appends counter for duplicate slugs 8ms
+ ✓ tests/integration/marketplace.test.ts > Marketplace Data > creates team with published skills for marketplace 45ms
+ ✓ tests/integration/marketplace.test.ts > Marketplace Data > returns empty plugins for team with no published skills 10ms
+ ✓ tests/integration/marketplace.test.ts > Marketplace Data > verifies team lookup by slug works 5ms
+ ✓ tests/lib/db.test.ts > Real MongoDB Connection > connects to real MongoDB and returns a Db instance 23ms
+ ✓ tests/lib/db.test.ts > Real MongoDB Connection > can ping the database 2ms
+ ✓ tests/lib/db.test.ts > Real MongoDB Connection > can list collections 2ms
+ ✓ tests/lib/db.test.ts > Real MongoDB Connection > can write and read a document 35ms
+ ✓ tests/lib/rbac.test.ts > hasPermission > viewer can only read 1ms
+ ✓ tests/lib/rbac.test.ts > hasPermission > member can create and update skills 0ms
+ ✓ tests/lib/rbac.test.ts > hasPermission > admin can manage skills and members 0ms
+ ✓ tests/lib/rbac.test.ts > hasPermission > owner has all permissions 0ms
+ ✓ tests/lib/rbac.test.ts > isRoleAtLeast > owner is at least every role 0ms
+ ✓ tests/lib/rbac.test.ts > isRoleAtLeast > viewer is only at least viewer 0ms
+ ✓ tests/lib/rbac.test.ts > canManageRole > owner can manage anyone 0ms
+ ✓ tests/lib/rbac.test.ts > canManageRole > admin can manage member and viewer but not owner 0ms
+ ✓ tests/lib/rbac.test.ts > canManageRole > member and viewer cannot manage anyone 0ms
+ ✓ tests/lib/rbac.test.ts > getPermissions > returns correct count per role 0ms
+ ✓ tests/lib/rbac.test.ts > isValidRole > accepts valid roles 0ms
+ ✓ tests/lib/rbac.test.ts > isValidRole > rejects invalid roles 0ms
+
+ Test Files  12 passed (12)
+      Tests  109 passed (109)
+   Start at  15:35:27
+   Duration  19.96s (transform 106ms, setup 0ms, import 852ms, tests 12.27s, environment 1ms)

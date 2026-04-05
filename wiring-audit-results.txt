@@ -1,0 +1,22 @@
+WIRED: 19
+DEAD: 0
+
+✅ WIRED asset-service ← ROUTE: app/api/assets/[id]/supply-chain/route.ts, ROUTE: app/api/assets/import/route.ts, SERVICE: org-service
+✅ WIRED search ← ROUTE: app/api/assets/route.ts, ROUTE: app/api/search/route.ts, SERVICE: asset-service, SERVICE: search-hybrid, SERVICE: github-import
+✅ WIRED search-hybrid ← ROUTE: app/api/search/route.ts
+✅ WIRED security-scanner ← ROUTE: app/api/assets/import/route.ts, SERVICE: type-scanner, SERVICE: github-import
+✅ WIRED type-scanner ← ROUTE: app/api/assets/[id]/supply-chain/route.ts, ROUTE: app/api/assets/import/route.ts, SERVICE: supply-chain
+✅ WIRED trust-score ← ROUTE: app/api/assets/[id]/supply-chain/route.ts, ROUTE: app/api/assets/import/route.ts, ROUTE: app/api/marketplace/browse/route.ts
+✅ WIRED approval-service ← ROUTE: app/api/approvals/[requestId]/review/route.ts, ROUTE: app/api/approvals/route.ts
+✅ WIRED supply-chain ← ROUTE: app/api/assets/[id]/supply-chain/route.ts
+✅ WIRED github-import ← ROUTE: app/api/skills/import/route.ts
+✅ WIRED department-templates ← ROUTE: app/api/orgs/[orgId]/departments/route.ts, SERVICE: org-service, SERVICE: copilot/meta-skills, SERVICE: copilot/tool-executor
+✅ WIRED org-service ← ROUTE: app/api/orgs/[orgId]/compliance/route.ts, ROUTE: app/api/orgs/[orgId]/departments/[deptId]/route.ts, ROUTE: app/api/orgs/[orgId]/departments/route.ts, ROUTE: app/api/orgs/[orgId]/discover/route.ts, ROUTE: app/api/orgs/[orgId]/scim/users/route.ts, ROUTE: app/api/orgs/[orgId]/sso/route.ts, ROUTE: app/api/orgs/[orgId]/webhooks/route.ts, ROUTE: app/api/orgs/route.ts
+✅ WIRED team-service ← ROUTE: app/api/teams/[teamId]/members/route.ts, ROUTE: app/api/teams/route.ts
+✅ WIRED sso-service ← ROUTE: app/api/orgs/[orgId]/sso/route.ts
+✅ WIRED scim-service ← ROUTE: app/api/orgs/[orgId]/scim/users/route.ts
+✅ WIRED audit-service ← ROUTE: app/api/assets/[id]/route.ts, ROUTE: app/api/assets/route.ts, ROUTE: app/api/dashboard/stats/route.ts, ROUTE: app/api/orgs/route.ts, ROUTE: app/api/settings/audit/route.ts, ROUTE: app/api/settings/tokens/route.ts, ROUTE: app/api/teams/[teamId]/members/route.ts, SERVICE: asset-service
+✅ WIRED api-token-service ← ROUTE: app/api/orgs/[orgId]/scim/users/route.ts, ROUTE: app/api/settings/tokens/route.ts, ROUTE: app/api/v1/tokens/route.ts
+✅ WIRED compliance-service ← ROUTE: app/api/orgs/[orgId]/compliance/route.ts
+✅ WIRED webhook-service ← ROUTE: app/api/orgs/[orgId]/webhooks/route.ts, ROUTE: app/api/settings/webhooks/route.ts, SERVICE: asset-service, SERVICE: approval-service
+✅ WIRED embedding-pipeline ← ROUTE: app/api/assets/route.ts, SERVICE: asset-service, SERVICE: github-import
