@@ -5,10 +5,10 @@
  * Verifies format detection, metadata extraction, and type mapping.
  */
 
-import { describe, it, expect, beforeAll } from "vitest";
+import { describe, it, expect } from "vitest";
 
 // Import the module to trigger parser registration
-import { detectFormat, parseFile, getRegisteredParsers, detectAllFormats } from "@/services/parsers";
+import { detectFormat, parseFile, getRegisteredParsers } from "@/services/parsers";
 
 describe("Parser Registry", () => {
   it("has all 11 parsers registered", () => {

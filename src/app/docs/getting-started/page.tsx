@@ -7,8 +7,22 @@ import Link from "next/link";
 const STEPS = [
   {
     step: 1,
+    title: "Configure Infra And Auth",
+    description: "Before the UI works, connect MongoDB, set NEXTAUTH_SECRET, and configure GitHub OAuth for sign-in.",
+    code: `# Required before first sign-in
+MONGODB_URI=mongodb+srv://... or mongodb://localhost:27017/...
+NEXTAUTH_SECRET=...
+NEXTAUTH_URL=http://localhost:3000
+GITHUB_CLIENT_ID=...
+GITHUB_CLIENT_SECRET=...
+
+# Optional but recommended for hybrid/vector search
+VOYAGE_API_KEY=...`,
+  },
+  {
+    step: 2,
     title: "Create Your Organization",
-    description: "Sign in with GitHub and create your organization. Choose a unique slug — this becomes your marketplace URL.",
+    description: "After GitHub OAuth is configured, sign in and create your organization. Choose a unique slug — this becomes your marketplace URL.",
     code: `POST /api/orgs
 {
   "name": "Acme Corp",
@@ -16,29 +30,30 @@ const STEPS = [
 }`,
   },
   {
-    step: 2,
-    title: "Set Up a Department",
-    description: "Create departments based on your team structure. Choose from 8 pre-built templates — each comes with starter configs.",
+    step: 3,
+    title: "Create A Department And Team",
+    description: "Create departments based on your team structure, then create or use a team inside that org context before importing assets.",
     code: `POST /api/orgs/{orgId}/departments
 {
   "name": "Frontend Engineering",
   "type": "engineering_fe"
 }
-// → Auto-provisions 2 starter assets`,
-  },
-  {
-    step: 3,
-    title: "Import Your Configs",
-    description: "Import existing CLAUDE.md, .cursorrules, or any config file. Drag-and-drop or use the GitHub import.",
-    code: `POST /api/assets/import
-{
-  "url": "https://github.com/org/repo",
-  "path": "CLAUDE.md",
-  "type": "rule"
-}`,
+// Team members import/export assets at the team level`,
   },
   {
     step: 4,
+    title: "Import Your First Asset",
+    description: "Import raw content or a URL. teamId is required because assets always belong to a team.",
+    code: `POST /api/assets/import
+{
+  "teamId": "664f2f9c8c2b9b3e6f4a1234",
+  "assetType": "rule",
+  "filename": "CLAUDE.md",
+  "content": "# Repository instructions..."
+}`,
+  },
+  {
+    step: 5,
     title: "Export to Your Tool",
     description: "Export any asset to your preferred AI coding tool format.",
     code: `GET /api/assets/{id}/export?format=cursor
@@ -48,10 +63,13 @@ GET /api/assets/{id}/export?format=copilot
 // Returns copilot-instructions.md`,
   },
   {
-    step: 5,
-    title: "Share via Marketplace",
-    description: "Publish configs to your team's marketplace. Claude Code and other tools can poll this endpoint.",
-    code: `// Your marketplace endpoint:
+    step: 6,
+    title: "Verify And Share",
+    description: "Use the health and discovery endpoints to verify the deployment, then publish to marketplace once the asset is ready.",
+    code: `GET /api/health
+GET /api/v1
+
+// Team marketplace endpoint:
 GET /api/marketplace/{teamSlug}
 
 // Or org-wide:
@@ -75,7 +93,7 @@ export default function GettingStartedPage() {
       <main className="mx-auto max-w-3xl px-6 py-16">
         <h1 className="text-4xl font-bold text-gray-900 dark:text-white">Getting Started</h1>
         <p className="mt-4 text-lg text-gray-600 dark:text-gray-400">
-          Set up your organization, import configs, and start sharing in under 5 minutes.
+          Connect MongoDB, configure GitHub OAuth, and bring your first agent assets online with truthful production checks.
         </p>
 
         <div className="mt-12 space-y-16">

@@ -20,7 +20,7 @@ export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ teamId: string }> }
 ) {
-  const authResult = await requireAuth();
+  const authResult = await requireAuth(request);
   if (!authResult.ok) return authResult.response;
 
   const { teamId: teamIdStr } = await params;
@@ -47,7 +47,7 @@ export async function POST(
   request: NextRequest,
   { params }: { params: Promise<{ teamId: string }> }
 ) {
-  const authResult = await requireAuth();
+  const authResult = await requireAuth(request);
   if (!authResult.ok) return authResult.response;
 
   const { teamId: teamIdStr } = await params;

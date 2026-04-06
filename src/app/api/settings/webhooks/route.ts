@@ -11,8 +11,8 @@ import { requireAuth } from "@/lib/api-helpers";
 import { createWebhook } from "@/services/webhook-service";
 import type { UserDocument } from "@/types/user";
 
-export async function GET() {
-  const authResult = await requireAuth();
+export async function GET(request: NextRequest) {
+  const authResult = await requireAuth(request);
   if (!authResult.ok) return authResult.response;
 
   const db = await getDb();
@@ -39,7 +39,7 @@ export async function GET() {
 }
 
 export async function POST(request: NextRequest) {
-  const authResult = await requireAuth();
+  const authResult = await requireAuth(request);
   if (!authResult.ok) return authResult.response;
 
   let body: { url: string; events: string[] };
@@ -73,7 +73,7 @@ export async function POST(request: NextRequest) {
 }
 
 export async function PATCH(request: NextRequest) {
-  const authResult = await requireAuth();
+  const authResult = await requireAuth(request);
   if (!authResult.ok) return authResult.response;
 
   let body: { webhookId: string; action: string };

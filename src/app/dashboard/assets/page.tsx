@@ -2,12 +2,13 @@
 
 /**
  * Assets list page — all 7 asset types, filterable, with real data from API.
- * Replaces the old "skills" page. Cards show trust score badge.
+ * Canonical dashboard registry listing. Cards show trust score badge.
  */
 
 import { useState } from "react";
 import useSWR from "swr";
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import { Plus, Loader2, Shield, AlertTriangle, Download } from "lucide-react";
 
 const ASSET_TYPES = [
@@ -50,10 +51,17 @@ interface AssetItem {
 }
 
 export default function AssetsPage() {
+  const searchParams = useSearchParams();
   const [typeFilter, setTypeFilter] = useState("");
   const [page, setPage] = useState(1);
-  const query = typeFilter ? `?type=${typeFilter}&page=${page}&limit=20` : `?page=${page}&limit=20`;
-  const { data, isLoading, error } = useSWR(`/api/assets${query}`, fetcher);
+  const queryText = searchParams.get("q")?.trim() ?? "";
+  const query = new URLSearchParams({
+    page: String(page),
+    limit: "20",
+    ...(typeFilter ? { type: typeFilter } : {}),
+    ...(queryText ? { q: queryText } : {}),
+  }).toString();
+  const { data, isLoading, error } = useSWR(`/api/assets?${query}`, fetcher);
 
   const assets: AssetItem[] = data?.assets ?? [];
   const total: number = data?.total ?? 0;
@@ -64,7 +72,11 @@ export default function AssetsPage() {
       <div className="flex items-center justify-between">
         <div>
           <h2 className="text-2xl font-bold text-gray-900 dark:text-white">Assets</h2>
-          <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">{total} total asset{total !== 1 ? "s" : ""}</p>
+          <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
+            {queryText
+              ? `${total} result${total !== 1 ? "s" : ""} for "${queryText}"`
+              : `${total} total asset${total !== 1 ? "s" : ""}`}
+          </p>
         </div>
         <Link href="/dashboard/assets/new"
           className="flex cursor-pointer items-center gap-1.5 rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700">
@@ -102,7 +114,7 @@ export default function AssetsPage() {
       {!isLoading && !error && (
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {assets.map((asset) => (
-            <Link key={asset.id} href={`/dashboard/skills/${asset.id}`}
+            <Link key={asset.id} href={`/dashboard/assets/${asset.id}`}
               className="group rounded-xl border border-gray-200 bg-white p-5 transition-all hover:border-blue-300 hover:shadow-sm dark:border-gray-800 dark:bg-gray-900 dark:hover:border-blue-700">
               <div className="flex items-start justify-between">
                 <span className="rounded-md bg-gray-100 px-2 py-0.5 text-xs font-medium text-gray-600 dark:bg-gray-800 dark:text-gray-400">

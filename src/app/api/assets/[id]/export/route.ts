@@ -12,7 +12,6 @@ import { ObjectId } from "mongodb";
 import { getDb } from "@/lib/db";
 import { requireAuth, getMemberRole } from "@/lib/api-helpers";
 import { hasPermission } from "@/lib/rbac";
-import type { TeamRole } from "@/types/team";
 import type { AssetDocument } from "@/types/asset";
 import {
   exportAsset,
@@ -26,7 +25,7 @@ export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const authResult = await requireAuth();
+  const authResult = await requireAuth(request);
   if (!authResult.ok) return authResult.response;
 
   const { id } = await params;
@@ -66,7 +65,7 @@ export async function GET(
   // RBAC — user must have read access to the team
   const userId = new ObjectId(authResult.userId);
   const role = await getMemberRole(db, userId, asset.teamId);
-  if (!role) {
+  if (!role || !hasPermission(role, "skill:read")) {
     return NextResponse.json({ error: "Insufficient permissions" }, { status: 403 });
   }
 

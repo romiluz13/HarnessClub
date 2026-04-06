@@ -8,6 +8,15 @@ const nextConfig: NextConfig = {
   },
   /** Per vercel-react-best-practices: optimize images, compress responses */
   compress: true,
+  images: {
+    remotePatterns: [
+      {
+        protocol: "https",
+        hostname: "avatars.githubusercontent.com",
+      },
+    ],
+    qualities: [75],
+  },
   /** Cache static assets aggressively */
   headers: async () => [
     {

@@ -4,7 +4,6 @@
  */
 
 import { describe, it, expect, beforeAll, afterAll, beforeEach } from "vitest";
-import { ObjectId } from "mongodb";
 import type { Db } from "mongodb";
 import {
   getTestDb,
@@ -34,13 +33,13 @@ describe("Marketplace Data", () => {
     const { teamId, userId, team } = await seedUserWithTeam(db);
 
     // Seed published skills
-    const skill1 = await seedSkill(db, teamId, userId, {
+    await seedSkill(db, teamId, userId, {
       metadata: { name: "TypeScript Utils", description: "TS utility functions", version: "1.0.0" },
       isPublished: true,
       tags: ["typescript", "utils"],
     });
 
-    const skill2 = await seedSkill(db, teamId, userId, {
+    await seedSkill(db, teamId, userId, {
       metadata: { name: "React Patterns", description: "React component patterns", version: "2.0.0" },
       isPublished: true,
       tags: ["react", "patterns"],

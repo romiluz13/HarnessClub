@@ -2,6 +2,526 @@
 
 ## Current State
 
+## 2026-04-06: Technology Leverage Research — External Registries, APIs, and Authoring Stack
+
+### What Was Checked
+- Re-read the local MCP setup guidance (`mongodb-mcp-setup`) and verified the live Codex MCP config after the PATH hardening:
+  - `codex mcp get MongoDB`
+  - `codex mcp get octocode`
+- Ran live research against:
+  - official MCP Registry docs
+  - OpenAI Responses API docs
+  - Skills docs / CLI docs
+  - direct `skills.sh` endpoint probing
+  - GitHub ecosystem repos around skills and content tooling
+- Directly probed `https://skills.sh/api/search?q=...` and confirmed it is a real JSON search surface with keys:
+  - `query`
+  - `searchType`
+  - `skills`
+  - `count`
+  - `duration_ms`
+- Verified `skills.sh/api/search` currently returns `200` with `content-type: application/json`.
+
+### Key Verified Findings
+- **MongoDB MCP local config**
+  - machine-side launch config is now correct for this Codex environment because both `MongoDB` and `octocode` use absolute Homebrew `npx` plus explicit PATH
+  - for Atlas users, the MongoDB MCP skill still recommends:
+    - service-account credentials for Atlas Admin/API workflows
+    - Atlas Local for local development
+    - plain connection-string auth as the quick single-cluster path
+  - this means the current read-only connection-string setup is acceptable for inspection work, but it is not the strongest long-term setup for Atlas-admin workflows
+- **Official MCP Registry**
+  - the registry is in preview
+  - it provides a REST API for clients/aggregators
+  - it is intended primarily for downstream aggregators/marketplaces
+  - it is **not** intended to be consumed directly by MCP host apps
+  - the official codebase is **not** intended for self-hosting
+- **Skills ecosystem**
+  - `skills.sh` has a live discovery/search API at `/api/search`
+  - Skills docs explicitly describe the `skills` CLI as open source and telemetry-backed for leaderboard ranking
+  - Skills docs also explicitly say users should review skills themselves and not assume every listed skill is fully safe/curated
+- **OpenAI platform**
+  - Responses API now positions itself as the unified agentic surface with built-in tools and remote MCP support
+  - this is the strongest short-term runtime/test surface for “preview this harness,” “try this configuration,” and later release/eval gates
+
+### Most Valuable External Levers
+1. **OpenAI Responses API + remote MCP support**
+   - best path for live harness preview/testing
+2. **Official MCP Registry REST API**
+   - best path for MCP discovery and metadata enrichment
+3. **GitHub App + template-repo flows**
+   - best path for import/sync/bootstrap and “generate starter repo from harness”
+4. **skills.sh discovery API**
+   - best path for skill discovery/enrichment, but should be treated as semi-stable and server-side only until the API contract is better documented
+5. **Authoring/rendering stack**
+   - `markdown-it`, `unified`, `Shiki`, `Tiptap`, and Mermaid-style tooling are strong candidates for making harness docs/configs/previews feel alive instead of database-like
+
+### Product Conclusion
+- The repo’s current problem is **not** lack of storage or metadata.
+- The missing leverage is:
+  - better discovery
+  - better setup/connect UX
+  - better live preview/test UX
+  - better authoring/preview surfaces for harnesses, policies, prompts, and install docs
+- AgentConfig should not become:
+  - just another registry
+  - just another markdown knowledge base
+  - just another MCP/package manager
+- AgentConfig should become the **curated downstream control plane + workbench** that:
+  - ingests metadata from upstream ecosystems
+  - adds trust/approval/org semantics
+  - helps teams test, shape, publish, and install real harnesses
+
+### Important Constraint
+- The machine-side Octocode fix is real, but the live desktop session still needs a full reload/restart before Octocode can be treated as a dependable in-session MCP research tool.
+
+## 2026-04-06: Octocode MCP Local Debug
+
+### What Was Checked
+- Verified `octocode` existed in `~/.codex/config.toml`.
+- Confirmed Codex shell environment in this session did **not** include `node`, `npm`, or `npx` on `PATH`.
+- Verified `octocode-mcp` itself is healthy when launched with a Node-capable PATH and Homebrew binaries:
+  - manual stdio launch succeeded
+  - real MCP `initialize` handshake succeeded
+  - server returned capabilities and instructions as `octocode-mcp_13.0.1`
+- Verified GitHub auth is already present on the machine via `gh auth status`.
+
+### Root Cause
+- `octocode` was configured as:
+  - `command = "npx"`
+  - `args = ["octocode-mcp"]`
+- But the Codex shell/app environment available in this session did not expose Homebrew Node binaries on `PATH`.
+- Because Homebrew `npx` uses `#!/usr/bin/env node`, both `command` resolution and `PATH` matter.
+
+### Fix Applied
+- Backed up the user config:
+  - `~/.codex/config.toml.bak-20260406-octocode`
+- Updated `~/.codex/config.toml` so `octocode` now uses:
+  - `command = "/opt/homebrew/bin/npx"`
+  - `args = ["--yes", "octocode-mcp@latest"]`
+  - `env.PATH = "/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin"`
+
+### What This Means
+- The local machine-side launch/config issue is fixed.
+- A Codex app restart or MCP reload is still needed for the desktop app to pick up the new config in practice.
+- This assistant runtime still cannot call `octocode` directly as a tool, but that is a runtime/tooling exposure limitation, not proof that the local MCP server is broken.
+
+## 2026-04-06: API Leverage Research — Octocode Status + Useful External APIs
+
+### What Was Checked
+- Verified local Codex MCP configuration in `~/.codex/config.toml`.
+- Confirmed `octocode` is configured locally:
+  - `command = "npx"`
+  - `args = ["octocode-mcp"]`
+- Confirmed via `codex mcp list` that `octocode` is enabled locally, but **this assistant runtime cannot call it directly** because MCP auth/support is marked unsupported in the current tool session.
+- Ran live official-doc web research on:
+  - OpenAI MCP / Responses / evals / webhooks / developer mode
+  - MCP Registry official docs
+  - GitHub App install auth + template repository APIs
+  - Slack Events API + incoming webhooks
+  - Microsoft Graph change notifications
+
+### Ranked High-Leverage API Opportunities
+1. **OpenAI Responses API + remote MCP support**
+   - strongest path for harness preview/test and future control-plane integrations
+2. **OpenAI Agent evals + trace grading + webhooks**
+   - strongest path for release-quality validation and async run/result ingestion
+3. **MCP Registry API**
+   - strongest path for MCP discovery, compatibility metadata, and marketplace enrichment
+4. **GitHub App APIs**
+   - strongest path for import/sync/install bootstrap from GitHub repos and orgs
+5. **GitHub template repository API**
+   - strongest path for “generate starter repo from approved harness” UX
+6. **Slack Events API + incoming webhooks**
+   - strong path for approvals, alerts, and activity sinks
+7. **Microsoft Graph change notifications**
+   - strong enterprise path for event-driven sync instead of polling
+
+### Key Product Conclusion
+- The most useful technology to leverage is the tech that makes AgentConfig feel like:
+  - a **setup/connectable harness control plane**
+  - a **testable/releasable system**
+  - a **real integration hub**
+- The least useful direction is random breadth. The product should prefer:
+  - MCP + GitHub + OpenAI first
+  - messaging/enterprise event APIs second
+  - everything else later
+
+### Important Constraint
+- `octocode` should be treated as a potentially useful local research tool for future repo/code intelligence work, but it is **not currently available as a callable MCP in this assistant session**, so product decisions should not assume it is part of the shipped runtime today.
+
+## 2026-04-06: Product Reframe Roadmap Written
+
+### What Was Done
+- Converted the Cabinet/Tank comparison into concrete AgentConfig roadmap docs:
+  - `docs/plans/2026-04-06-agentconfig-product-reframe-design.md`
+  - `docs/plans/2026-04-06-agentconfig-product-reframe-plan.md`
+- Locked the key product direction:
+  - steal Cabinet’s onboarding + workbench feeling
+  - steal Tank’s setup/install/trust clarity
+  - keep AgentConfig’s identity as a harness control plane
+
+### Core Outcome
+- The repo now has a written answer to:
+  - what to steal now
+  - what to steal later
+  - what not to steal
+  - what the first hero workflow should be
+- The first recommended implementation target is now explicit:
+  - **guided setup -> harness recommendation -> harness creation -> harness workbench -> export/install/test**
+
+### What This Means
+- Product work can now stop drifting between “admin polish” and “invent a giant new platform.”
+- The next serious implementation slice should be the reframe:
+  - workbench-first dashboard
+  - guided harness creation
+  - real setup/connect UX
+  - library/assets demoted to supporting role
+
+## 2026-04-06: External Product Reference Pass — Cabinet + Tank
+
+### What Was Done
+- Pulled the latest `main` from two nearby reference repos:
+  - `/Users/rom.iluz/Dev/cabinet`
+  - `/Users/rom.iluz/Dev/tank`
+- `cabinet` had a force-pushed remote history, so the previous local `main` was preserved on:
+  - `codex/cabinet-pre-sync-20260406-011422`
+  then local `main` was reset to `origin/main` before review.
+- Read the current product/readme/docs and key workflow files from both projects to understand what makes them feel more “alive” or more “installable” than AgentConfig currently does.
+
+### Key Takeaways
+- **Cabinet** solves the feeling problem:
+  - 5-question onboarding wizard
+  - visible AI team / mission control
+  - live terminal and job runs
+  - task inbox and workspace files per agent
+  - “watch your team work” framing instead of “manage records”
+- **Tank** solves the trust/install problem:
+  - self-hosted setup wizard
+  - explicit install commands and copyable DX
+  - clean CLI/web/MCP story
+  - security/trust as a first-class browse/install experience
+  - product brief that sharply distinguishes shipped behavior from roadmap
+
+### What This Means For AgentConfig
+- The founder’s dissatisfaction is rational: AgentConfig currently exposes too much of the **registry/admin layer** and too little of the **magic/workflow layer**.
+- The best external ideas are not “copy their whole products.”
+- The right move is to borrow:
+  - from Cabinet: onboarding, runtime visibility, harness/workspace feeling
+  - from Tank: installability, setup wizard, explicit connection flow, truthful trust signals
+- The wrong move would be to turn AgentConfig into:
+  - a markdown knowledge base like Cabinet
+  - or a package manager/security registry like Tank
+
+### Recommended Direction
+- Build a **guided harness setup + runtime workbench** as the main product flow.
+- Add a **real self-hosted setup/connect wizard** so OSS users can get to value without reading backend docs.
+- Keep the current asset/control-plane foundation, but stop presenting it as the whole product.
+
+## 2026-04-06: Visual Product Read — Real App Is a Registry/Control Plane, Not Yet a Full Harness Workspace
+
+### What Was Checked
+- Re-opened the local manager QA session with `agent-browser` and reviewed the actual shipped UI surfaces:
+  - dashboard
+  - assets registry
+  - asset detail
+  - settings
+  - public marketplace
+
+### Brutal Product Read
+- The app is **not** “nothing,” but it is also **not yet the ambitious product the founder is imagining when they think ‘enterprise agent harness hub’.**
+- What exists today is a real **admin/control-plane product**:
+  - registry of agent-related assets
+  - basic team/org administration
+  - settings and governance surfaces
+  - public marketplace browse/install surface
+- What is missing from the emotional/product experience is the **main event**:
+  - no vivid “build a harness” workflow
+  - no strong guided composition flow
+  - no central runtime/execution workspace
+  - no immediately obvious “why this matters” screen once you log in
+
+### What This Means
+- The repo is not a piece of junk. The foundation is real.
+- But the founder’s disappointment is understandable because the current UI reads more like:
+  - “asset registry + admin console”
+  than:
+  - “the place where enterprises design, assemble, and operationalize agent systems”
+- The next product step should be about **product framing and workflow experience**, not only more backend correctness.
+
+## 2026-04-06: Dual Local Test Personas Prepared Without OAuth
+
+### What Was Done
+- Extended the existing local QA tenant in `skillshub_qa` with a second user:
+  - `QA Owner` → `org_owner` + team `owner`
+  - `QA Employee` → org `member` + team `member`
+- Minted two separate local Auth.js session-state files:
+  - `/tmp/skillshub-manager-state.json`
+  - `/tmp/skillshub-employee-state.json`
+- Verified both personas successfully resolve through `/api/auth/session` and both receive `200` on `/dashboard`.
+
+### What This Means
+- Local manual QA no longer depends on GitHub OAuth setup.
+- We now have a clean two-role test path for:
+  - admin/manager verification
+  - normal employee verification
+
+## 2026-04-05: Local Manual QA Runtime Prepared With Seeded Authenticated Browser Session
+
+### What Was Done
+- Brought up a clean local MongoDB QA instance on `127.0.0.1:27019` and seeded a stable manual-QA tenant in `skillshub_qa`:
+  - user: `QA Owner`
+  - org: `AgentConfig QA Org`
+  - team: `Revenue Harness Team`
+  - assets: published skill, draft agent, published plugin
+- Minted a real Auth.js session cookie locally using `@auth/core/jwt` and loaded it into a headed browser session for dashboard QA without changing product auth code or requiring live GitHub OAuth.
+- Verified the following pages render correctly in a browser on the seeded runtime:
+  - `/dashboard`
+  - `/dashboard/assets`
+  - `/dashboard/assets/660000000000000000000401`
+  - `/dashboard/teams`
+  - `/dashboard/settings`
+  - `/dashboard/settings/organization`
+  - `/dashboard/settings/sso`
+  - `/marketplace`
+- Verified supporting runtime/API truth for the same local QA setup:
+  - `/api/health` → `status: ok`
+  - `/api/auth/session` resolves the synthetic Auth.js session correctly
+  - `/api/assets` returns the 3 seeded assets
+  - `/api/teams` returns the seeded team
+- Added a manual QA checklist at `docs/qa/2026-04-05-manual-qa-checklist.md`.
+
+### New Finding
+- `npm run start` is currently a bad local visual-QA/runtime entrypoint on this worktree. The standalone server serves app HTML but misses the built CSS chunk locally, causing an unstyled interface. `npx next start` serves the CSS correctly and was used for the actual manual browser QA pass.
+
+### Verification
+- `curl http://127.0.0.1:3020/api/health` ✅ `status: ok`
+- Browser-verified seeded dashboard runtime via `agent-browser` ✅
+- Search submit browser flow (`Revenue`) ✅ navigates to `/dashboard/assets?q=Revenue` with 2 matching results
+
+### What This Means
+- The repo now has a prepared local manual-QA target with realistic seeded data and an authenticated dashboard session, which materially reduces the risk of “I can’t even get in to test this.”
+- The next release-confidence step should include fixing the standalone static-asset path so the documented production/local start command matches the visually correct app runtime.
+
+## 2026-04-05: Fresh Real Grove + Voyage Live Validation Reconfirmed
+
+### What Was Verified
+- Re-ran the explicit live copilot lane using ephemeral shell env only, without writing Grove or Voyage credentials into the repo.
+- Verified the dedicated live runner (`npm run test:live`) works end-to-end against the real Grove gateway and the app’s real copilot/search stack after the zero-skip lane split.
+- Confirmed the current live lane still exercises both:
+  - `tests/integration/copilot-pi-live.test.ts`
+  - `tests/integration/copilot-chat-route-live.test.ts`
+
+### Verification
+- `PATH=/opt/homebrew/bin:/usr/local/bin:$PATH COPILOT_LIVE_TEST=1 COPILOT_PROVIDER=grove COPILOT_MODEL=gpt-5.4 COPILOT_BASE_URL=<grove chat completions url> COPILOT_API_KEY=<ephemeral> COPILOT_API_KEY_HEADER=api-key VOYAGE_API_KEY=<ephemeral> npm run test:live` ✅ **2 passed, 0 failed**
+
+### What This Means
+- The live-provider contract is now verified again on the current worktree, not just historically.
+- The repo now has both:
+  - a deterministic default lane: `npm run test` → `540 passed, 0 skipped`
+  - a real-provider lane: `npm run test:live` → Grove-backed copilot validation passes
+- This materially strengthens release confidence for the copilot/search stack, but it still does **not** by itself prove “100% production ready” across OSS installability, docs truth, extension productization, operational rate limiting, or full UX/DX quality.
+
+## 2026-04-05: Zero-Skip Default Test Lane + Canonical Assets Routes
+
+### What Was Fixed
+- Default `vitest` is now a truly deterministic lane with no hidden live-provider skips:
+  - `vitest.config.ts` excludes `tests/**/*-live.test.ts`
+  - `package.json` now exposes an explicit `npm run test:live`
+  - `vitest.live.config.ts` provides a dedicated config for the live Grove/OpenAI-compatible suite
+  - `tests/helpers/copilot-live-config.ts` fails fast with a clear env message when live tests are invoked without provider configuration
+- The remaining user-facing `/dashboard/skills` drift was reduced materially:
+  - added canonical asset detail page at `src/app/dashboard/assets/[id]/page.tsx`
+  - legacy `src/app/dashboard/skills/page.tsx` and `src/app/dashboard/skills/[id]/page.tsx` now redirect to `/dashboard/assets`
+  - search, mobile nav, asset cards, and detail navigation now point to `/dashboard/assets...`
+- Fixed an additional truth hole discovered during the route cleanup: the global search submit path now actually works instead of only changing the URL.
+  - `src/app/api/assets/route.ts` now accepts `?q=` and filters by `searchText`
+  - `src/app/dashboard/assets/page.tsx` now reads `q` from the URL and shows filtered result counts
+
+### Test Coverage Added / Updated
+- Added `tests/app/dashboard-skills-redirects.test.tsx`
+- Expanded:
+  - `tests/components/search-bar.test.tsx`
+  - `tests/components/skill-card.test.tsx`
+  - `tests/components/skills-list.test.tsx`
+- Live copilot tests now fail immediately at module load when env is missing instead of silently counting as skipped behind `describe.skip`
+
+### Verification
+- Focused route/UI suite ✅ `30/30` passing
+- `PATH=/opt/homebrew/bin:/usr/local/bin:$PATH env -u COPILOT_LIVE_TEST -u COPILOT_MODEL -u COPILOT_BASE_URL -u COPILOT_API_KEY npm run test:live` ✅ **fails fast with explicit missing-env message and 0 skipped tests**
+- `PATH=/opt/homebrew/bin:/usr/local/bin:$PATH npm run lint` ✅
+- `PATH=/opt/homebrew/bin:/usr/local/bin:$PATH npx tsc --noEmit` ✅
+- `PATH=/opt/homebrew/bin:/usr/local/bin:$PATH npm run test` ✅ **540 passed, 0 skipped**
+- `PATH=/opt/homebrew/bin:/usr/local/bin:$PATH npm run build` ✅
+
+### What This Means
+- The default OSS/CI gate is now literally zero-skip, which matches the project’s “skip = fail” discipline.
+- Live copilot validation is no longer hidden in the default suite; it is an explicit contract with a dedicated runner and honest failure mode.
+- The dashboard’s canonical registry surface is now `assets`, while old `skills` URLs remain compatibility redirects instead of competing route surfaces.
+
+## 2026-04-05: Trust-Floor Slice 2 Closed — Sign-In Honesty, Sidebar Hydration, Proxy Truth, Copilot Save Semantics
+
+### What Was Fixed
+- Fixed the sidebar hydration regression in `src/components/sidebar.tsx` by moving collapse persistence onto a `useSyncExternalStore`-based browser preference model instead of reading `localStorage` during render.
+- Made the sign-in surface provider-aware:
+  - `src/lib/auth.ts` now exposes configured provider metadata
+  - `src/app/auth/signin/page.tsx` now renders setup guidance instead of a broken GitHub button when OAuth is not configured
+  - `src/components/sign-in-form.tsx` is now driven by provider props instead of hardcoding GitHub assumptions
+- Made proxy behavior more honest in `src/proxy.ts` by removing the misleading CORS/hardening framing and surfacing the throttling scope explicitly via `X-RateLimit-Scope: local-instance`.
+- Fixed the scoped copilot conversation save semantics in `src/services/copilot/memory-service.ts`: when an out-of-scope or stale `conversationId` is provided, the service now creates a fresh scoped conversation instead of silently returning the old ID after a no-op update.
+
+### Test Coverage Added
+- `tests/components/sign-in-form.test.tsx`
+- `tests/app/auth-signin-page.test.tsx`
+- `tests/integration/proxy.test.ts`
+- Expanded:
+  - `tests/components/sidebar.test.tsx`
+  - `tests/integration/copilot-chat-route.test.ts`
+  - `tests/integration/e2e-copilot-memory.test.ts`
+
+### Verification
+- `PATH=/opt/homebrew/bin:/usr/local/bin:$PATH npm run lint` ✅
+- `PATH=/opt/homebrew/bin:/usr/local/bin:$PATH npx tsc --noEmit` ✅
+- Focused trust-floor suite ✅ `37/37` passing
+- `PATH=/opt/homebrew/bin:/usr/local/bin:$PATH npm run test` ✅ **536 passed, 2 skipped**
+- `PATH=/opt/homebrew/bin:/usr/local/bin:$PATH npm run build` ✅
+
+### What This Means
+- The earlier second-pass review findings for sidebar hydration, provider-aware sign-in honesty, proxy truthfulness, and scoped conversation-save behavior are now materially addressed in code and tests.
+- The biggest remaining honesty gap is still the default test lane reporting `2 skipped` when live Grove env vars are absent. The live path remains verified separately, but the default OSS/CI story is not yet a literal no-skip baseline.
+
+## 2026-04-05: Lint Warning Debt Cleared — Zero-Warning Baseline Restored
+
+### What Was Fixed
+- Removed the remaining lint warning debt across routes, UI, services, and tests, bringing `eslint` back to a true zero-warning state instead of “green with known noise.”
+- Tightened `GET /api/assets/:id/export` so it now enforces explicit `skill:read` permission, not just team membership.
+- Tightened `GET /api/marketplace/:teamSlug` so invalid `?type=` values now return `400` with the supported asset types instead of silently pretending the filter is valid.
+- Replaced the raw avatar `<img>` in `src/components/user-menu.tsx` with `next/image` and added the minimal GitHub avatar remote-image config in `next.config.ts`.
+- Removed a couple of dead runtime queries during the cleanup, including unused metrics work in `metrics-service.ts` and an unused team lookup in proactive suggestions.
+
+### Verification
+- `PATH=/opt/homebrew/bin:/usr/local/bin:$PATH npm run lint` ✅ **0 errors, 0 warnings**
+- `PATH=/opt/homebrew/bin:/usr/local/bin:$PATH npx tsc --noEmit` ✅
+- `PATH=/opt/homebrew/bin:/usr/local/bin:$PATH npm run test` ✅ **526 passed, 2 skipped**
+- `PATH=/opt/homebrew/bin:/usr/local/bin:$PATH bun run vitest run tests/integration/copilot-pi-live.test.ts tests/integration/copilot-chat-route-live.test.ts` with Grove env ✅ **2/2 passed**
+- `PATH=/opt/homebrew/bin:/usr/local/bin:$PATH npm run build` ✅
+
+### What This Means
+- The repo now has a cleaner release baseline: zero lint noise, green typecheck, green default test suite, green live copilot verification, and green production build.
+- The only remaining nuance in the gate story is explicit: the default `npm run test` lane still skips the two live Grove tests unless live copilot secrets are supplied. The live no-skip path is proven, but not yet the default developer/CI path.
+
+## 2026-04-05: Full No-Skip Test Baseline Achieved With Live Grove Copilot
+
+### What Was Added
+- Extended the main platform end-to-end suite in `tests/integration/e2e-platform.test.ts` to cover the missing public distribution workflow:
+  - approval-driven publication into marketplace visibility
+  - public marketplace browse visibility with `releaseStatus`
+  - successful install for a healthy published plugin bundle
+  - explicit failure for a broken published plugin bundle
+- This strengthens the repo’s primary “platform” E2E instead of fragmenting the coverage into only narrow regression files.
+
+### Live Copilot Validation
+- Used the provided Grove gateway configuration (`COPILOT_PROVIDER=grove`, `COPILOT_MODEL=gpt-5.4`, Azure API-key header auth) to run the previously skipped live copilot suites.
+- Fixed a stale test-harness mock in `tests/integration/copilot-chat-route-live.test.ts` so the live route test matches the stricter team-authorization path now present in `/api/copilot/chat`.
+- Verified both live suites pass:
+  - `tests/integration/copilot-pi-live.test.ts` ✅
+  - `tests/integration/copilot-chat-route-live.test.ts` ✅
+
+### Verification
+- `PATH=/opt/homebrew/bin:/usr/local/bin:$PATH bun run vitest run tests/integration/e2e-platform.test.ts tests/integration/release-state-regressions.test.ts tests/integration/api-marketplace.test.ts` ✅ 58/58 passing
+- `PATH=/opt/homebrew/bin:/usr/local/bin:$PATH npx tsc --noEmit` ✅
+- `PATH=/opt/homebrew/bin:/usr/local/bin:$PATH npm run test` with live Grove env enabled ✅ **528 passed, 0 skipped**
+
+### What This Means
+- The repo now has a real no-skip test baseline when live copilot configuration is available.
+- The release-confidence story is materially stronger than before: the main platform E2E proves publish→marketplace→install, and the real model path is no longer hidden behind skipped suites.
+- Remaining release concerns now narrow further toward:
+  - warning cleanup
+  - the remaining trust-floor/runtime honesty issues already logged in the roadmap
+  - broader endpoint/workflow expansion if we want an even stricter release gate
+
+## 2026-04-05: Release-State Recovery Complete — Lifecycle + Install Integrity Fixed
+
+### What Was Fixed
+- Kept the new release-state direction, but finished the broken lifecycle edges instead of reverting the whole branch.
+- Approval outcomes now treat approved `update` requests as distributable again, so reviewed updates land back in `published` instead of getting stranded as `approved`.
+- Approval request creation is now safer: the request is inserted before the asset is moved into `pending_review`, and the asset state update is version-guarded. If the request insert path fails, the asset is no longer left stranded in review state.
+- Plugin install no longer silently omits unpublished or unexportable bundled assets. `/api/assets/:id/install` now fails loudly with bundle-integrity diagnostics instead of returning a broken partial payload with `200`.
+- The assets validator now explicitly includes `releaseStatus` and `currentVersionNumber`, so the release-state model is represented in the schema layer instead of living only in TypeScript/service code.
+- Stabilization route tests were refreshed to match the newer asset response shape and approval request version semantics.
+- The capabilities seed helper now retries live Voyage embedding calls, which removed a flaky external timeout from the broad test gate without dropping the “real embedding” validation path.
+
+### Verification
+- `PATH=/opt/homebrew/bin:/usr/local/bin:$PATH npx tsc --noEmit` ✅
+- `PATH=/opt/homebrew/bin:/usr/local/bin:$PATH npm run lint` ✅ 0 errors, 51 warnings
+- `PATH=/opt/homebrew/bin:/usr/local/bin:$PATH npm run test` ✅ 522 passed, 2 skipped
+- `PATH=/opt/homebrew/bin:/usr/local/bin:$PATH npm run build` ✅ clean production build
+- Additional targeted regression verification:
+  - `bun run vitest run tests/integration/release-state-regressions.test.ts tests/integration/e2e-platform.test.ts tests/integration/setup-db.test.ts` ✅
+  - `bun run vitest run tests/integration/stabilization-routes.test.ts` ✅
+
+### What This Means
+- The interrupted release-state branch is now materially safer to keep. The core model is still worth building on, and the two most dangerous behavioral regressions from that branch are closed:
+  - approved updates disappearing from distribution
+  - plugin bundles pretending to install successfully while missing children
+- The repo is back to a truthful green baseline after these changes, not just “green until you inspect the lifecycle.”
+- Remaining work should now go back to the broader production-readiness roadmap instead of firefighting this branch.
+
+## 2026-04-05: Uncommitted Release-State Worktree Review
+
+### What Was Reviewed
+- Inspected the new uncommitted worktree changes touching:
+  - `src/types/asset.ts`
+  - `src/services/asset-service.ts`
+  - `src/services/approval-service.ts`
+  - `src/app/api/assets/*.ts`
+  - marketplace browse/install endpoints
+  - `src/lib/api-helpers.ts`
+- These changes introduce a real **release-state model** (`draft`, `pending_review`, `approved`, `published`, `archived`) and start connecting approvals, marketplace visibility, and installability to that model.
+
+### What Improved
+- Direct asset publishing through `PATCH /api/assets/:id` is now blocked and routed toward the approvals workflow.
+- Marketplace and install routes now distinguish “published for distribution” more carefully instead of trusting `isPublished` alone.
+- Asset creation is more centralized again by using `createAsset()` from the service layer instead of duplicating validation/audit/embed logic in the route.
+- Approval requests are now version-aware and can be invalidated when the asset changes.
+
+### New Risks Opened
+- The new release-state workflow is only partially landed. The biggest correctness risk found is that approving an `update` request maps the asset to `approved`, not `published`, while published assets are demoted to draft/unpublished on edit. That likely leaves approved updates unavailable for marketplace/install flows.
+- Plugin install now silently skips unpublished bundled assets instead of failing loudly, which can produce a partial/broken plugin payload while still returning `200`.
+- Approval request creation now flips the asset into `pending_review` before the approval request insert/audit/webhook path is complete, so a later failure can strand the asset in review state without a matching request.
+
+### Validation Limits
+- This pass was static review only. The current Codex environment has no `node`, `npm`, or `bun` on PATH, so I could not rerun lint/typecheck/tests/build against the new worktree changes.
+- No tests were changed alongside this new release-state work, which is a trust risk by itself given how much lifecycle behavior changed.
+
+## 2026-04-05: Production Readiness Roadmap Locked
+
+### What Was Decided
+- The release plan is now organized around four ordered gates instead of treating “polish” as one big final bucket:
+  1. **Trust floor** — security, authz, broken contracts, honest validation
+  2. **OSS installability** — supported environment tiers, first-run setup, env doctor, docs truth
+  3. **Platform completion** — close the highest-value conceptual gaps in the harness/configuration model
+  4. **Differentiation** — governed memory, replay/evals, release gates, stronger policy semantics
+- Added a concrete execution artifact: `docs/plans/2026-04-05-production-readiness-roadmap.md`
+- A skeptical review of the latest stabilization commit found it was useful but not enough to claim “production ready”: the onboarding seeding fix and env-gated integration init were good, but runtime auth UX drift, proxy hardening over-claims, silent scoped conversation save failures, and a sidebar hydration risk still remain.
+
+### What Still Seems Likely
+- There are probably more issues still hiding in legacy `/dashboard/skills` drift, extension bootstrap/docs, and flows that only look healthy because CI is green. The repo is materially stronger now, but not yet at the point where green automation alone should be trusted as a launch signal.
+
+### Next Execution Order
+- Finish the remaining trust-floor bugs first:
+  - scoped copilot conversation save no-op
+  - provider-aware sign-in/install UX
+  - proxy/rate-limit deployment truth
+  - hydration-safe sidebar state
+  - remaining authz / naming / route drift audit
+- Then move directly into OSS installability:
+  - Atlas cloud vs local Atlas vs plain Mongo support matrix
+  - env doctor / first-run validation
+  - truthful README + CONTRIBUTING + `.env.example`
+  - deterministic seed/bootstrap path
+- Reassess 1.0 scope only after those two gates are complete.
+
 ## 2026-04-05: Atlas Local Preview Reality Pass — Zero-Mock Validation
 
 ### What Was Verified
@@ -269,10 +789,11 @@ New pages: 13 | New API routes: 5 | Modified services: 2 | Modified routes: 4 | 
 | 21 | Live Asset Preview + Rich Rendering | ✅ COMPLETE |
 
 ## What's Next
-**V3 Roadmap COMPLETE** — All 21 phases done. Real Grove Pi validation and live-route parity are now in place. If a browser-driven copilot E2E is desired next, the repo first needs a dedicated copilot UI surface to drive.
+**Final release signoff remains a separate gate from “all roadmap phases complete.”** The backend/API/runtime trust floor is now strong and live-provider validation is real, but a true “ship it” signoff still needs browser-driven UI verification plus extension/fresh-install smoke on a clean machine.
 
 ## Blockers
-None.
+- No known backend/API/build blocker remains on the current worktree.
+- Remaining release-signoff gap: browser-level UI verification and extension/fresh-install validation are still not programmatically covered in this environment.
 
 ## Cabinet Analysis (2026-04-04)
 - Cloned to `/Users/rom.iluz/Dev/cabinet/` for reference
@@ -297,10 +818,58 @@ None.
 - **V1 Phases**: 6-7 ❌ CANCELLED (absorbed into V2)
 - **V2 Phases**: 8-15 ✅ ALL COMPLETE (43 tasks, 196 tests)
 - **V3 Phases**: 16-21 ✅ ALL COMPLETE
-- **Total Tests**: ~500+ passing (42+ test files), 0 mocks, build clean
+- **Deterministic Tests**: 544 passing across 52 files, 0 skipped
+- **Live Provider Tests**: 2/2 Grove-backed copilot suites passing
 - **Skill Guidelines**: 15 installed
 - **Embedding Model**: voyage-3-lite (512d) → autoEmbed primary (ADR-010), manual fallback
-- **Framework**: Next.js 15 App Router
+- **Framework**: Next.js 16 App Router
 - **API Routes**: 20+ endpoints
 - **Asset Types**: 7 (skill, rule, agent, plugin, mcp_config, hook, settings_bundle)
 - **Export Formats**: 5 (Claude Code, Cursor, Copilot, Windsurf, Codex)
+
+## 2026-04-05: Final Release Gate — Runtime Contract Truth Pass
+
+### What Was Fixed
+- Added a real `/api/health` readiness route so Docker and deploy smoke checks validate app + MongoDB truthfully.
+- Fixed bearer-token auth drift on the core asset and token routes by passing the current request into route auth helpers and making `requireAuth()` authorization-header-aware even when routes forget to pass the request explicitly.
+- Corrected the public API discovery document so it advertises `GET /api/search?q=` instead of the nonexistent `/api/assets/search`.
+- Rewrote the docs/install surfaces to match the real product contract: MongoDB mode choices, GitHub OAuth requirement for UI sign-in, truthful import payload examples, and standalone production start behavior.
+- Switched `npm run start` to the standalone server entry so local production smoke matches the Docker/runtime artifact instead of emitting the Next.js standalone warning.
+- Fixed the final standalone-auth issue by setting `trustHost: true` in Auth.js, which removed `UntrustedHost` errors during production-artifact smoke runs.
+
+### Verification
+- `npm run lint` ✅
+- `npx tsc --noEmit` ✅
+- `npm run test` ✅ `544 passed, 0 skipped`
+- `npm run test:live` ✅ `2 passed`
+- `npm run build` ✅
+- Production-artifact smoke on `node .next/standalone/server.js` ✅
+  - `/api/health` returned `200` with `mongo: ok`
+  - `/api/v1` returned the corrected discovery contract
+  - `/auth/signin` showed the expected “OAuth not configured” guidance when GitHub creds were intentionally absent
+  - Bearer-token runtime checks against `/api/assets`, `/api/assets/:id`, `/api/v1/tokens`, and `/api/settings/tokens` all returned `200`
+
+### What This Means
+- The repo now has a truthful release candidate baseline for backend, API, auth, docs, and self-host runtime behavior.
+- I still do **not** call this “100% production ready / state-of-the-art UI-UX-DX” yet, because browser-driven app verification and extension/fresh-install release drills are still missing from the final signoff.
+
+## 2026-04-05: External Research — Microsoft APM (`microsoft/apm`)
+
+### What Was Researched
+- Cloned `https://github.com/microsoft/apm` locally to `/Users/rom.iluz/Dev/apm`.
+- Reviewed the repo README, manifest/lockfile docs, enterprise/governance docs, runtime compatibility docs, and the Python CLI structure.
+- Confirmed APM is an **agent package manager / installer / compiler** layer, not a hosted registry or enterprise control plane.
+
+### What APM Actually Is
+- APM centers on `apm.yml` + `apm.lock.yaml` as a dependency/lock model for agent primitives, prompts, hooks, MCP servers, and plugins.
+- It resolves transitive dependencies from Git-based sources, installs them into tool-native file trees, supports marketplaces, and adds policy/audit/CI checks around that install flow.
+- It also has experimental runtime-management features for Copilot/Codex/LLM CLIs and a policy layer (`apm-policy.yml`) on top of the lockfile/install model.
+
+### Best Current Read
+- **Complementary, not a replacement.**
+- APM is strongest as a **downstream package/install/runtime layer** for repo-local agent setup.
+- AgentConfig is strongest as the **upstream system of record / enterprise control plane**: asset registry, org/team governance, RBAC, approvals, version history, marketplace publishing, audit/search, and eventually governed memory/release semantics.
+
+### Practical Product Implication
+- The best path is likely: **export to APM, import from APM, maybe generate `apm.yml` / `apm.lock.yaml` / APM packages as one deployment target**.
+- The wrong path would be: rewrite the product around APM or assume APM replaces the enterprise platform layer we are building. It does not.

@@ -70,8 +70,8 @@ export async function saveMessages(
   const expiresAt = new Date(now.getTime() + TTL_DAYS * 24 * 60 * 60 * 1000);
 
   if (input.conversationId) {
-    // Append to existing conversation, truncate to max
-    await db.collection<ConversationDocument>("copilot_conversations").updateOne(
+    // Append to an in-scope conversation when it exists, otherwise create a fresh one.
+    const result = await db.collection<ConversationDocument>("copilot_conversations").updateOne(
       {
         _id: input.conversationId,
         teamId: input.teamId,
@@ -82,7 +82,10 @@ export async function saveMessages(
         $set: { updatedAt: now, expiresAt },
       }
     );
-    return input.conversationId;
+
+    if (result.matchedCount > 0) {
+      return input.conversationId;
+    }
   }
 
   // Create new conversation
@@ -127,25 +130,20 @@ export async function listConversations(
   limit: number = 10
 ): Promise<Array<{ id: string; title: string; updatedAt: string; messageCount: number }>> {
   const docs = await db.collection<ConversationDocument>("copilot_conversations")
-    .find({ teamId, userId })
-    .sort({ updatedAt: -1 })
-    .limit(limit)
-    .project({ title: 1, updatedAt: 1, messages: { $slice: 0 } })
+    .aggregate<{ _id: ObjectId; title?: string; updatedAt: Date; messageCount: number }>([
+      { $match: { teamId, userId } },
+      { $sort: { updatedAt: -1 } },
+      { $limit: limit },
+      { $project: { title: 1, updatedAt: 1, messageCount: { $size: { $ifNull: ["$messages", []] } } } },
+    ])
     .toArray();
 
-  // messages.$slice:0 gives empty array, we need count separately
-  const results = await Promise.all(docs.map(async (doc) => {
-    const full = await db.collection<ConversationDocument>("copilot_conversations")
-      .findOne({ _id: doc._id }, { projection: { messages: 1 } });
-    return {
-      id: doc._id.toHexString(),
-      title: doc.title ?? "Untitled",
-      updatedAt: doc.updatedAt.toISOString(),
-      messageCount: full?.messages?.length ?? 0,
-    };
+  return docs.map((doc) => ({
+    id: doc._id.toHexString(),
+    title: doc.title ?? "Untitled",
+    updatedAt: doc.updatedAt.toISOString(),
+    messageCount: doc.messageCount,
   }));
-
-  return results;
 }
 
 /**

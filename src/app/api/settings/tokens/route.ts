@@ -14,8 +14,8 @@ import { createApiToken, revokeApiToken, listUserTokens } from "@/services/api-t
 import { logAuditEvent } from "@/services/audit-service";
 import type { UserDocument } from "@/types/user";
 
-export async function GET() {
-  const authResult = await requireAuth();
+export async function GET(request: NextRequest) {
+  const authResult = await requireAuth(request);
   if (!authResult.ok) return authResult.response;
 
   const db = await getDb();
@@ -44,7 +44,7 @@ export async function GET() {
 }
 
 export async function POST(request: NextRequest) {
-  const authResult = await requireAuth();
+  const authResult = await requireAuth(request);
   if (!authResult.ok) return authResult.response;
 
   let body: { name: string; scope?: string };
@@ -95,7 +95,7 @@ export async function POST(request: NextRequest) {
 }
 
 export async function PATCH(request: NextRequest) {
-  const authResult = await requireAuth();
+  const authResult = await requireAuth(request);
   if (!authResult.ok) return authResult.response;
 
   let body: { tokenId: string; action: string };
@@ -121,12 +121,19 @@ export async function PATCH(request: NextRequest) {
     return NextResponse.json({ error: "Token not found or already revoked" }, { status: 404 });
   }
 
+  // Resolve actual teamId from user memberships
+  const user = await db.collection<UserDocument>("users").findOne(
+    { _id: userId },
+    { projection: { teamMemberships: { $slice: 1 }, orgMemberships: { $slice: 1 } } }
+  );
+  const auditTeamId = user?.teamMemberships?.[0]?.teamId ?? user?.orgMemberships?.[0]?.orgId ?? userId;
+
   await logAuditEvent(db, {
     actorId: userId,
     action: "auth:token_revoke",
     targetId: tokenId,
     targetType: "api_token",
-    teamId: userId, // best effort
+    teamId: auditTeamId,
     details: {},
   });
 

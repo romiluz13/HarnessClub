@@ -14,7 +14,6 @@ import {
   TEAM_A_ID,
   TEAM_B_ID,
   USER_OWNER_ID,
-  USER_MEMBER_ID,
   CAP_TEST_MARKER,
 } from "../helpers/seed-capabilities";
 

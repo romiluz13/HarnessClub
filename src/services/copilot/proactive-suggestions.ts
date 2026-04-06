@@ -31,18 +31,16 @@ export async function generateProactiveSuggestions(
   const suggestions: ProactiveSuggestion[] = [];
 
   // Parallel queries
-  const [assets, recentActivity, team] = await Promise.all([
+  const [assets, recentActivity] = await Promise.all([
     db.collection("assets")
       .find({ teamId })
       .project({ type: 1, lastScan: 1, isPublished: 1 })
       .toArray(),
     db.collection("audit_logs")
       .countDocuments({ teamId, timestamp: { $gte: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000) } }),
-    db.collection("teams").findOne({ _id: teamId }, { projection: { memberIds: 1 } }),
   ]);
 
   const totalAssets = assets.length;
-  const memberCount = team?.memberIds?.length ?? 1;
 
   // 1. Unscanned assets
   const unscanned = assets.filter((a) => !a.lastScan);

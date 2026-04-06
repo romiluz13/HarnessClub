@@ -12,12 +12,15 @@ import userEvent from "@testing-library/user-event";
 import "@testing-library/jest-dom/vitest";
 
 // Mock fetch for search API
-const mockFetch = vi.fn();
+const { mockFetch, mockPush } = vi.hoisted(() => ({
+  mockFetch: vi.fn(),
+  mockPush: vi.fn(),
+}));
 global.fetch = mockFetch;
 
 // Mock next/navigation
 vi.mock("next/navigation", () => ({
-  useRouter: () => ({ push: vi.fn() }),
+  useRouter: () => ({ push: mockPush }),
   usePathname: () => "/dashboard",
   useSearchParams: () => new URLSearchParams(),
 }));
@@ -35,20 +38,20 @@ describe("SearchBar", () => {
     vi.clearAllMocks();
     mockFetch.mockResolvedValue({
       ok: true,
-      json: () => Promise.resolve({ results: [], total: 0 }),
+      json: () => Promise.resolve({ suggestions: [], total: 0 }),
     });
   });
 
   // ── Rendering ──────────────────────────────────────────────
   it("renders search input with placeholder", () => {
     render(<SearchBar />);
-    const input = screen.getByRole("combobox", { name: /search skills/i });
+    const input = screen.getByRole("combobox", { name: /search assets/i });
     expect(input).toBeInTheDocument();
   });
 
   it("renders keyboard shortcut hint in placeholder", () => {
     render(<SearchBar />);
-    const input = screen.getByRole("combobox", { name: /search skills/i });
+    const input = screen.getByRole("combobox", { name: /search assets/i });
     expect(input).toHaveAttribute("placeholder", expect.stringContaining("⌘K"));
   });
 
@@ -56,14 +59,14 @@ describe("SearchBar", () => {
   it("updates input value on typing", async () => {
     const user = userEvent.setup();
     render(<SearchBar />);
-    const input = screen.getByRole("combobox", { name: /search skills/i });
+    const input = screen.getByRole("combobox", { name: /search assets/i });
     await user.type(input, "React hooks");
     expect(input).toHaveValue("React hooks");
   });
 
   it("focuses input on Cmd+K", () => {
     render(<SearchBar />);
-    const input = screen.getByRole("combobox", { name: /search skills/i });
+    const input = screen.getByRole("combobox", { name: /search assets/i });
     fireEvent.keyDown(document, { key: "k", metaKey: true });
     expect(document.activeElement).toBe(input);
   });
@@ -71,7 +74,7 @@ describe("SearchBar", () => {
   it("closes suggestions and blurs on Escape", async () => {
     const user = userEvent.setup();
     render(<SearchBar />);
-    const input = screen.getByRole("combobox", { name: /search skills/i });
+    const input = screen.getByRole("combobox", { name: /search assets/i });
 
     await act(async () => {
       input.focus();
@@ -81,34 +84,46 @@ describe("SearchBar", () => {
     expect(document.activeElement).not.toBe(input);
   });
 
-  // ── Empty Results ──────────────────────────────────────────
-  it("shows no results message for empty search", async () => {
-    mockFetch.mockResolvedValue({
-      ok: true,
-      json: () => Promise.resolve({ results: [], total: 0 }),
-    });
+  it("submits the typed query to the assets listing route", async () => {
     const user = userEvent.setup();
     render(<SearchBar />);
-    const input = screen.getByRole("combobox", { name: /search skills/i });
-    await user.type(input, "xyznonexistent");
+    const input = screen.getByRole("combobox", { name: /search assets/i });
+    await user.type(input, "registry hygiene");
+    fireEvent.submit(input.closest("form")!);
 
-    await waitFor(() => {
-      const noResults = screen.queryByText(/no results/i) || screen.queryByText(/no skills found/i);
-      if (noResults) expect(noResults).toBeInTheDocument();
-    }, { timeout: 3000 });
+    expect(mockPush).toHaveBeenCalledWith("/dashboard/assets?q=registry%20hygiene");
+  });
+
+  it("navigates to the canonical asset detail route from a suggestion", async () => {
+    mockFetch.mockResolvedValue({
+      ok: true,
+      json: () => Promise.resolve({
+        suggestions: [{ skillId: "asset-1", name: "React Hooks" }],
+      }),
+    });
+
+    const user = userEvent.setup();
+    render(<SearchBar />);
+    const input = screen.getByRole("combobox", { name: /search assets/i });
+    await user.type(input, "Re");
+
+    await waitFor(() => expect(mockFetch).toHaveBeenCalled());
+    await user.click(await screen.findByText("React Hooks"));
+
+    expect(mockPush).toHaveBeenCalledWith("/dashboard/assets/asset-1");
   });
 
   // ── Accessibility ──────────────────────────────────────────
   it("has proper aria attributes", () => {
     render(<SearchBar />);
-    const input = screen.getByRole("combobox", { name: /search skills/i });
+    const input = screen.getByRole("combobox", { name: /search assets/i });
     expect(input.tagName).toBe("INPUT");
     expect(input).toHaveAttribute("aria-autocomplete", "list");
   });
 
   it("input has minimum touch target size", () => {
     render(<SearchBar />);
-    const input = screen.getByRole("combobox", { name: /search skills/i });
+    const input = screen.getByRole("combobox", { name: /search assets/i });
     expect(input).toBeVisible();
   });
 });

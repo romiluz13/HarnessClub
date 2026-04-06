@@ -14,10 +14,10 @@ import { getDepartment, getOrgById } from "@/services/org-service";
 import type { AssetDocument } from "@/types/asset";
 
 export async function GET(
-  _request: NextRequest,
+  request: NextRequest,
   { params }: { params: Promise<{ orgId: string; deptId: string }> }
 ) {
-  const authResult = await requireAuth();
+  const authResult = await requireAuth(request);
   if (!authResult.ok) return authResult.response;
 
   const { orgId, deptId } = await params;

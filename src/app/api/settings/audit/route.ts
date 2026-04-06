@@ -9,28 +9,29 @@ import { NextRequest, NextResponse } from "next/server";
 import { ObjectId } from "mongodb";
 import { getDb } from "@/lib/db";
 import { requireAuth } from "@/lib/api-helpers";
-import { getAuditLogs, exportToSiem } from "@/services/audit-service";
+import { exportToSiem } from "@/services/audit-service";
 import type { UserDocument } from "@/types/user";
+import { escapeRegex } from "@/lib/utils";
 
 export async function GET(request: NextRequest) {
-  const authResult = await requireAuth();
+  const authResult = await requireAuth(request);
   if (!authResult.ok) return authResult.response;
 
   const db = await getDb();
   const userId = new ObjectId(authResult.userId);
 
-  // Get user's team for scoping
+  // Get ALL user's teams for org-scoped audit log query
   const user = await db.collection<UserDocument>("users").findOne({ _id: userId });
-  const teamId = user?.teamMemberships?.[0]?.teamId;
-  if (!teamId) {
+  const teamIds = user?.teamMemberships?.map((m: { teamId: ObjectId }) => m.teamId) ?? [];
+  if (teamIds.length === 0) {
     return NextResponse.json({ entries: [], total: 0 });
   }
 
   const { searchParams } = request.nextUrl;
 
-  // SIEM export mode
+  // SIEM export mode — scoped to primary team (multi-team SIEM is future enhancement)
   if (searchParams.get("export") === "siem") {
-    const events = await exportToSiem(db, { teamId });
+    const events = await exportToSiem(db, { teamId: teamIds[0] });
     return new NextResponse(JSON.stringify(events, null, 2), {
       headers: {
         "Content-Type": "application/json",
@@ -43,10 +44,10 @@ export async function GET(request: NextRequest) {
   const limit = Math.min(100, Math.max(1, parseInt(searchParams.get("limit") || "25", 10)));
   const actionPrefix = searchParams.get("action") || "";
 
-  // Build filter
-  const filter: Record<string, unknown> = { teamId };
+  // Build filter — org-scoped across all user's teams
+  const filter: Record<string, unknown> = { teamId: { $in: teamIds } };
   if (actionPrefix) {
-    filter.action = { $regex: `^${actionPrefix}`, $options: "i" };
+    filter.action = { $regex: `^${escapeRegex(actionPrefix)}`, $options: "i" };
   }
 
   // Count + paginated query

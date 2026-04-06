@@ -1,5 +1,5 @@
 /**
- * Skill card — displays a skill summary in grid or list layout.
+ * Skill card — displays an asset summary in grid or list layout.
  * Server-compatible (no 'use client'). Receives data as props.
  * Per AGENTS.md: cursor-pointer, 44px targets, Lucide icons.
  */
@@ -43,7 +43,7 @@ export function SkillCard({
   if (layout === "list") {
     return (
       <Link
-        href={`/dashboard/skills/${id}`}
+        href={`/dashboard/assets/${id}`}
         className="flex cursor-pointer items-center gap-4 rounded-lg border border-gray-200 bg-white px-4 py-3 hover:border-gray-300 hover:shadow-sm transition-all min-h-[44px]"
       >
         <div className="flex-1 min-w-0">
@@ -68,7 +68,7 @@ export function SkillCard({
 
   return (
     <Link
-      href={`/dashboard/skills/${id}`}
+      href={`/dashboard/assets/${id}`}
       className="flex cursor-pointer flex-col rounded-xl border border-gray-200 bg-white p-5 hover:border-gray-300 hover:shadow-sm transition-all"
     >
       {/* Header */}

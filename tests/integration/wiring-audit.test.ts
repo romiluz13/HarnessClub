@@ -10,7 +10,6 @@
  */
 
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
-import { type Db } from "mongodb";
 import { getTestDb, closeTestDb } from "../helpers/db-setup";
 import fs from "fs";
 import path from "path";
@@ -95,12 +94,11 @@ const ALL_SERVICES = [
   "embedding-pipeline",
 ];
 
-let db: Db;
 let routeImports: Map<string, string[]>;
 let wiredServices: Set<string>;
 
 beforeAll(async () => {
-  db = await getTestDb();
+  await getTestDb();
 
   // Build import map for all API routes
   const apiDir = path.join(SRC, "app", "api");

@@ -88,14 +88,14 @@ export function SearchBar() {
     e?.preventDefault();
     if (query.trim()) {
       setOpen(false);
-      router.push(`/dashboard/skills?q=${encodeURIComponent(query.trim())}`);
+      router.push(`/dashboard/assets?q=${encodeURIComponent(query.trim())}`);
     }
   };
 
   const handleSelect = (suggestion: Suggestion) => {
     setOpen(false);
     setQuery(suggestion.name);
-    router.push(`/dashboard/skills/${suggestion.skillId}`);
+    router.push(`/dashboard/assets/${suggestion.skillId}`);
   };
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
@@ -124,9 +124,9 @@ export function SearchBar() {
             onChange={(e) => handleChange(e.target.value)}
             onFocus={() => setOpen(true)}
             onKeyDown={handleKeyDown}
-            placeholder="Search skills... (⌘K)"
+            placeholder="Search assets... (⌘K)"
             className="w-full rounded-lg border border-gray-200 bg-gray-50 py-2 pl-10 pr-10 text-sm text-gray-900 placeholder:text-gray-400 focus:border-blue-500 focus:bg-white focus:outline-none focus:ring-1 focus:ring-blue-500 transition-colors"
-            aria-label="Search skills"
+            aria-label="Search assets"
             aria-expanded={open && suggestions.length > 0}
             aria-controls="search-suggestions"
             role="combobox"

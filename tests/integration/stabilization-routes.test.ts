@@ -47,6 +47,33 @@ async function loadRoute<TModule>(modulePath: string): Promise<TModule> {
         );
         return user?.orgMemberships?.[0]?.role ?? null;
       },
+      serializeAsset: (doc: {
+        _id: ObjectId;
+        type: string;
+        teamId: ObjectId;
+        metadata: { name: string; description: string; author?: string; version?: string };
+        tags: string[];
+        stats?: { installCount?: number; viewCount?: number };
+        isPublished: boolean;
+        releaseStatus?: string;
+        createdAt: Date;
+        updatedAt: Date;
+      }) => ({
+        id: doc._id.toHexString(),
+        type: doc.type,
+        teamId: doc.teamId.toHexString(),
+        name: doc.metadata.name,
+        description: doc.metadata.description,
+        author: doc.metadata.author,
+        version: doc.metadata.version,
+        tags: doc.tags,
+        installCount: doc.stats?.installCount ?? 0,
+        viewCount: doc.stats?.viewCount ?? 0,
+        isPublished: doc.isPublished,
+        releaseStatus: doc.releaseStatus ?? (doc.isPublished ? "published" : "draft"),
+        createdAt: doc.createdAt.toISOString(),
+        updatedAt: doc.updatedAt.toISOString(),
+      }),
     };
   });
 
@@ -369,6 +396,7 @@ describe("Approval review protection", () => {
       teamId,
       requestedBy: ownerId,
       action: "publish",
+      assetVersionNumber: 0,
       status: "pending",
       requiredApprovals: 1,
       decisions: [],

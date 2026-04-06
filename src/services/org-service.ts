@@ -14,7 +14,6 @@ import type {
   CreateDeptInput,
   OrgSettings,
 } from "@/types/organization";
-import type { CachedUserRef } from "@/types/team";
 
 // ─── Organization CRUD ──────────────────────────────────────
 
@@ -110,6 +109,7 @@ export async function createDepartment(
   input: CreateDeptInput,
   _createdBy: ObjectId
 ): Promise<{ success: boolean; deptId?: ObjectId; assetIds?: ObjectId[]; error?: string }> {
+  void _createdBy;
   const now = new Date();
 
   const doc: Omit<DepartmentDocument, "_id"> = {

@@ -7,6 +7,7 @@
  */
 
 import { useState, useRef, useEffect } from "react";
+import Image from "next/image";
 import { useSession, signOut } from "next-auth/react";
 import { LogOut, User } from "lucide-react";
 
@@ -53,9 +54,12 @@ export function UserMenu() {
         aria-label="User menu"
       >
         {image ? (
-          <img
+          <Image
             src={image}
             alt={name ?? "User avatar"}
+            width={32}
+            height={32}
+            unoptimized
             className="h-8 w-8 rounded-full"
           />
         ) : (

@@ -18,7 +18,9 @@ import { NextRequest, NextResponse } from "next/server";
 import { createHash } from "crypto";
 import { getDb } from "@/lib/db";
 import type { TeamDocument } from "@/types/team";
-import type { AssetDocument, AssetType, ASSET_TYPES } from "@/types/asset";
+import { ASSET_TYPES } from "@/types/asset";
+import type { AssetDocument, AssetType } from "@/types/asset";
+import { getPublishedDistributionFilter } from "@/services/asset-service";
 
 interface MarketplacePlugin {
   name: string;
@@ -70,9 +72,19 @@ export async function GET(
 
   // Optional type filter
   const typeFilter = request.nextUrl.searchParams.get("type");
-  const query: Record<string, unknown> = { teamId: team._id, isPublished: true };
+  if (typeFilter && !ASSET_TYPES.includes(typeFilter as AssetType)) {
+    return NextResponse.json(
+      { error: `Invalid asset type: ${typeFilter}`, availableTypes: [...ASSET_TYPES] },
+      { status: 400 }
+    );
+  }
+
+  const query: Record<string, unknown> = {
+    teamId: team._id,
+    ...getPublishedDistributionFilter(),
+  };
   if (typeFilter) {
-    query.type = typeFilter;
+    query.type = typeFilter as AssetType;
   }
 
   // Get published assets for this team

@@ -11,17 +11,14 @@ import { ObjectId } from "mongodb";
 import { getDb } from "@/lib/db";
 import { ASSET_TYPES } from "@/types/asset";
 import type { AssetType, CreateAssetInput } from "@/types/asset";
-import { buildSearchText } from "@/types/asset";
-import { validateAssetInput } from "@/lib/asset-validators";
 import { requireAuth, getUserTeamIds, serializeAsset, getMemberRole } from "@/lib/api-helpers";
 import type { AssetDocument } from "@/types/asset";
 import { hasPermission } from "@/lib/rbac";
-import { embedAsset } from "@/services/embedding-pipeline";
-import { needsManualEmbedding, detectSearchMode } from "@/lib/search-mode";
-import { logAuditEvent } from "@/services/audit-service";
+import { createAsset } from "@/services/asset-service";
+import { escapeRegex } from "@/lib/utils";
 
 export async function GET(request: NextRequest) {
-  const authResult = await requireAuth();
+  const authResult = await requireAuth(request);
   if (!authResult.ok) return authResult.response;
 
   const { searchParams } = request.nextUrl;
@@ -29,6 +26,11 @@ export async function GET(request: NextRequest) {
   const limit = Math.min(50, Math.max(1, parseInt(searchParams.get("limit") || "20", 10)));
   const skip = (page - 1) * limit;
   const typeParam = searchParams.get("type");
+  const queryParam = searchParams.get("q")?.trim();
+
+  if (queryParam && queryParam.length > 200) {
+    return NextResponse.json({ error: "Query too long (max 200 chars)" }, { status: 400 });
+  }
 
   const db = await getDb();
   const teamIds = await getUserTeamIds(db, authResult.userId);
@@ -40,6 +42,9 @@ export async function GET(request: NextRequest) {
   const filter: Record<string, unknown> = { teamId: { $in: teamIds } };
   if (typeParam && ASSET_TYPES.includes(typeParam as AssetType)) {
     filter.type = typeParam;
+  }
+  if (queryParam) {
+    filter.searchText = { $regex: escapeRegex(queryParam), $options: "i" };
   }
 
   const [assets, total] = await Promise.all([
@@ -56,7 +61,7 @@ export async function GET(request: NextRequest) {
 }
 
 export async function POST(request: NextRequest) {
-  const authResult = await requireAuth();
+  const authResult = await requireAuth(request);
   if (!authResult.ok) return authResult.response;
 
   let body: Record<string, unknown>;
@@ -116,45 +121,17 @@ export async function POST(request: NextRequest) {
     settingsConfig: body.settingsConfig as CreateAssetInput["settingsConfig"],
   };
 
-  // Application-level type validation (8.2)
-  const validation = validateAssetInput(input);
-  if (!validation.valid) {
-    return NextResponse.json({ error: "Validation failed", errors: validation.errors }, { status: 422 });
+  const result = await createAsset(db, input);
+
+  if (!result.success) {
+    return NextResponse.json(
+      { error: result.error, errors: result.validationErrors ?? [] },
+      { status: result.validationErrors ? 422 : 400 }
+    );
   }
 
-  const now = new Date();
-  const searchText = buildSearchText(input.metadata.name, input.metadata.description, input.content, input.tags);
-
-  const doc = {
-    _id: new ObjectId(),
-    ...input,
-    searchText,
-    stats: { installCount: 0, viewCount: 0 },
-    createdAt: now,
-    updatedAt: now,
-  };
-
-  await db.collection("assets").insertOne(doc);
-
-  // Embed if needed (M0/local mode only — ADR-010)
-  const mode = await detectSearchMode(db);
-  if (needsManualEmbedding(mode)) {
-    try {
-      await embedAsset(db, doc._id, input.metadata.name, input.metadata.description, input.content, input.tags);
-    } catch (err) {
-      console.warn(`Embedding failed for asset ${doc._id}:`, err);
-    }
-  }
-
-  // Audit log
-  await logAuditEvent(db, {
-    actorId: userId,
-    action: "asset:create",
-    targetId: doc._id,
-    targetType: input.type,
-    teamId: teamOid,
-    details: { name: input.metadata.name, type: input.type },
-  });
-
-  return NextResponse.json({ id: doc._id.toHexString(), type: input.type, name: input.metadata.name }, { status: 201 });
+  return NextResponse.json(
+    { id: result.assetId.toHexString(), type: result.type, name: result.name, releaseStatus: "draft" },
+    { status: 201 }
+  );
 }

@@ -1,6 +1,70 @@
 # SkillsHub → AgentConfig — Architecture Decisions
 
 
+### ADR-019: External registries are upstream discovery sources; AgentConfig remains the curated downstream control plane — 2026-04-06
+**Context**: A fresh research pass across the official MCP Registry, Skills/skills.sh, OpenAI Responses docs, and adjacent authoring ecosystems clarified why the product still feels shallow. The missing value is not more raw storage; it is better discovery, better preview/testing, and better authoring/presentation. The official MCP Registry explicitly says it is intended primarily for downstream aggregators and not direct host-app consumption. Skills/skills.sh provides real discovery value and a live search API, but its own docs also say users should review skills themselves and not assume full curation/security. That means neither registry should become the product itself.
+**Decision**:
+1. Treat the official MCP Registry as an **upstream metadata source** for MCP discovery and enrichment.
+2. Treat `skills.sh` as an **optional upstream discovery/enrichment source** for skills, preferably consumed server-side and not as a hard runtime dependency until the API contract is better documented.
+3. Keep AgentConfig’s identity as the **curated downstream system of record** that adds:
+   - org/team ownership
+   - trust/review/approval semantics
+   - bundling and harness composition
+   - install/export flows
+   - eventually preview/eval/release workflows
+4. Invest in richer authoring/presentation surfaces so the curated control plane feels like a workbench, not a database browser.
+**Alternatives Considered**: (1) copy public registries and become a mirror, (2) ignore ecosystem registries and force all discovery to happen inside AgentConfig, (3) pivot the product into a generic package manager / skill leaderboard.
+**Consequences**: Discovery gets dramatically better without collapsing product differentiation. AgentConfig can ingest ecosystem metadata while keeping curation, governance, trust, and enterprise workflow as the real value layer.
+
+
+### ADR-018: Borrow product feeling from Cabinet and installability/trust patterns from Tank, without changing AgentConfig into either product — 2026-04-06
+**Context**: A fresh comparative pass against the latest local `cabinet` and `tank` repos explains why AgentConfig feels underwhelming despite having real backend depth. Cabinet creates strong emotional/product payoff with a guided onboarding flow, visible agent activity, runtime surfaces, task inboxes, and workspace visibility. Tank creates strong OSS confidence with an explicit setup wizard, copyable install commands, CLI/web/MCP parity, and sharper trust signals. AgentConfig currently has more of a registry/admin feel than a “build and run agent systems” feel.
+**Decision**:
+1. Keep AgentConfig’s identity as a multi-tenant agent configuration/control-plane product.
+2. Borrow **Cabinet-like** product patterns only where they reinforce the core story:
+   - guided onboarding
+   - visible runtime/workbench surfaces
+   - task/job/workspace visibility for harnesses and agents
+3. Borrow **Tank-like** product patterns only where they improve OSS adoption and trust:
+   - setup/connect wizard
+   - copyable install/connect commands
+   - explicit trust/install signals
+   - clearer separation of shipped behavior vs roadmap claims
+4. Do **not** pivot AgentConfig into:
+   - a markdown-first knowledge base / startup OS
+   - or a package-manager / skill-security registry
+**Alternatives Considered**: (1) keep focusing purely on backend/platform correctness and hope the product “clicks” later, (2) copy Cabinet’s whole AI-team metaphor wholesale, (3) copy Tank’s package-manager/security-product framing wholesale.
+**Consequences**: The next UX roadmap should prioritize a guided harness setup flow and a visible runtime workbench, while the OSS/DX roadmap should prioritize first-run setup, connection clarity, and truthful installability. This gives the product a better chance to feel alive without losing its real enterprise control-plane differentiation.
+
+
+### ADR-017: `/dashboard/assets` is the canonical registry surface; `/dashboard/skills` is compatibility-only — 2026-04-05
+**Context**: The product pivoted from a skills-only manager into a multi-asset registry, but the dashboard still exposed mixed route semantics: some surfaces used `/dashboard/assets`, others still linked to `/dashboard/skills`, and the global search submit path changed the URL without actually producing filtered results. That drift created product dishonesty even while the underlying asset model was already canonical.
+**Decision**:
+1. Treat `/dashboard/assets` and `/dashboard/assets/[id]` as the canonical dashboard routes for registry browsing and detail views.
+2. Keep `/dashboard/skills` and `/dashboard/skills/[id]` only as backward-compatible redirects.
+3. Make supporting navigation and search align with the canonical route surface:
+   - mobile nav points to assets
+   - search suggestions/details resolve to asset routes
+   - listing/detail cards resolve to asset routes
+   - `/api/assets?q=` powers search-submit filtering for the canonical listing page
+**Alternatives Considered**: (1) keep both route families live indefinitely, (2) delete the legacy routes immediately and risk breaking bookmarked links, (3) leave the search submit path cosmetic until a future dedicated search page exists.
+**Consequences**: User-facing navigation is more truthful and consistent, while old links still resolve safely. The remaining `/api/skills` compatibility routes can persist longer if needed, but they are no longer the dashboard’s primary story.
+
+
+### ADR-016: Production readiness is gated by trust, installability, and product truth before differentiation — 2026-04-05
+**Context**: The repo now has a real asset-registry foundation and recent stabilization work restored green build/test discipline, but skeptical review showed that green gates alone still permit hidden launch blockers: runtime auth UX drift, per-process proxy rate limiting, silent scoped conversation save failures, and lingering UI/route naming drift. The product also wants to ship OSS-first, which raises the bar for setup truth and first-run determinism.
+**Decision**:
+1. Define OSS 1.0 readiness with four ordered gates:
+   - **Gate 1: Trust floor** — authz/security, contract alignment, truthful validation, no hidden runtime failures
+   - **Gate 2: OSS installability** — supported environment tiers, setup docs, env doctor, seeds, deterministic first run
+   - **Gate 3: Platform completion** — promote only the minimum missing first-class concepts needed for the harness/configuration story
+   - **Gate 4: Differentiation** — governed memory, replay/evals, release gates, stronger policy semantics
+2. Do not start differentiation work while Gate 1 or Gate 2 is still materially incomplete.
+3. Treat “passes lint/typecheck/tests/build” as a baseline, not as a launch claim.
+**Alternatives Considered**: (1) continue feature expansion while trusting green automation, (2) push hard on governed memory/control-plane features before the OSS install story is honest, (3) treat the repo as “ready enough” and defer the remaining inconsistencies to post-release cleanup.
+**Consequences**: Roadmap sequencing becomes stricter and less flashy, but it aligns with the actual adoption risk: strangers will judge the project first on whether it installs, works, and behaves safely. Innovation work is still the strategic destination, but no longer allowed to mask launch-readiness debt.
+
+
 ### ADR-015: Open-source-first release with supported environment tiers — 2026-04-05
 **Context**: Product direction is shifting toward an OSS-first release rather than immediate SaaS operations. The promise is: clone the repo, connect either a local Atlas-style deployment or Atlas cloud, and manage complete agent harnesses (skills, rules, hooks, MCP, bundles) reliably out of the box. Current repo/docs drift undermines that promise: `README.md` recommends `docker compose up` against plain `mongo:7`, while core search capabilities rely on Atlas Search / Vector Search / local Atlas features. Official docs also show that local Atlas deployments are now a real supported path through Atlas CLI, while MCP Registry is an official upstream metadata source for downstream marketplaces.
 **Decision**:
@@ -70,6 +134,16 @@
 **Alternatives Considered**: (1) Stay manual-only (works but adds latency, code complexity, API key management, and rate-limit risk), (2) Wait for GA before planning (wastes design time, GA is imminent), (3) Auto-embed only, no fallback (breaks M0 free tier and local dev).
 **Consequences**: Phase 8.3 gains autoEmbed index definition. `embedding-pipeline.ts` becomes fallback-only. `search.ts` needs dual-mode query (text query vs vector query). Import pipeline (Phase 9) no longer needs `embedSkill()` calls when autoEmbed is active. ADR-005 is SUPERSEDED for production but kept for fallback path.
 **Supersedes**: ADR-005 (for production deployments). ADR-005 remains valid for M0/local fallback.
+
+### ADR-012: Standalone Runtime Is The Release Artifact — 2026-04-05
+**Context**: `next build` and route-module tests were green, but the final standalone smoke still exposed real release issues: missing `/api/health`, stale `/api/v1` discovery docs, bearer-token drift on real HTTP requests, and Auth.js `UntrustedHost`.
+**Decision**: Treat the standalone production artifact as the canonical release target for verification and local production start.
+- `npm run start` now executes `node .next/standalone/server.js`.
+- `/api/health` is a required readiness contract for Docker/self-hosted deployments.
+- Final release checks must hit the running artifact over HTTP, including bearer-token auth flows.
+- Auth.js is configured with `trustHost: true` for self-hosted/runtime correctness.
+**Alternatives Considered**: (1) Keep `next start` and treat the standalone warning as acceptable noise, (2) trust route-module tests/build output alone, (3) leave Docker health checks pointed at a nonexistent route.
+**Consequences**: Runtime validation becomes stricter but much more honest. The release gate now verifies the exact artifact users will run, which reduces “green build, broken deploy” false confidence.
 
 ### ADR-009: V2 Pivot — From Skills Manager to Universal Agent Configuration Platform — 2026-04-02
 **Context**: Research revealed that Claude Code now supports 15+ asset types (skills, agents, hooks, MCP servers, LSP servers, plugins, commands, scheduled tasks, channels), not just skills. The `marketplace.json` protocol enables self-hostable plugin marketplaces. Reddit threads show enterprise teams duct-taping solutions with git repos and symlinks. 11+ competitors analyzed — none combine enterprise governance + semantic search + cross-tool + multi-department + beyond-skills. Department harnesses (complete config bundles for Sales, Engineering, DevOps) are validated by community (204 skills across 13 departments already exist).

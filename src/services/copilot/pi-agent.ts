@@ -11,7 +11,7 @@
  */
 
 import { Agent, type AgentOptions, type BeforeToolCallContext, type BeforeToolCallResult } from "@mariozechner/pi-agent-core";
-import { getModel, streamSimple, type Api, type Message, type Model } from "@mariozechner/pi-ai";
+import { getModel, getProviders, streamSimple, type Api, type KnownProvider, type Message, type Model } from "@mariozechner/pi-ai";
 import type { Db } from "mongodb";
 import { buildSystemPrompt } from "./context-builder";
 import {
@@ -78,11 +78,13 @@ function resolveModel() {
   const provider = process.env.COPILOT_PROVIDER?.trim() ?? "";
   const modelId = process.env.COPILOT_MODEL?.trim() ?? "";
 
-  // Explicit provider + model
+  // Explicit provider + model — validate provider before calling getModel
   if (provider && modelId) {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const model = getModel(provider as any, modelId as any);
-    if (model) return model;
+    const knownProviders = getProviders();
+    if (knownProviders.includes(provider as KnownProvider)) {
+      const model = getModel(provider as KnownProvider, modelId as Parameters<typeof getModel>[1]);
+      if (model) return model;
+    }
   }
 
   // Try common providers in order

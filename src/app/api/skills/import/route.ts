@@ -17,6 +17,7 @@ import { getDb } from "@/lib/db";
 import { importFromGitHub, batchImportFromGitHub } from "@/services/github-import";
 import { hasPermission } from "@/lib/rbac";
 import type { TeamRole } from "@/types/team";
+import { escapeRegex } from "@/lib/utils";
 
 function isValidObjectId(id: string): boolean {
   return /^[a-f\d]{24}$/i.test(id);
@@ -76,7 +77,7 @@ export async function POST(request: NextRequest) {
   if (!isBatch) {
     const existing = await db.collection("assets").findOne({
       teamId,
-      "source.repoUrl": { $regex: new RegExp(repoUrl.replace(/^https?:\/\//, ""), "i") },
+      "source.repoUrl": { $regex: new RegExp(escapeRegex(repoUrl.replace(/^https?:\/\//, "")), "i") },
     });
 
     if (existing) {

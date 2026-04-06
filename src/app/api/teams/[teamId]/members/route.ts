@@ -40,8 +40,8 @@ async function getTargetRole(
   return getMemberRole(db, userId, teamId);
 }
 
-export async function GET(_request: NextRequest, { params }: RouteParams) {
-  const authResult = await requireAuth();
+export async function GET(request: NextRequest, { params }: RouteParams) {
+  const authResult = await requireAuth(request);
   if (!authResult.ok) return authResult.response;
 
   const { teamId } = await params;
@@ -84,7 +84,7 @@ export async function GET(_request: NextRequest, { params }: RouteParams) {
 }
 
 export async function POST(request: NextRequest, { params }: RouteParams) {
-  const authResult = await requireAuth();
+  const authResult = await requireAuth(request);
   if (!authResult.ok) return authResult.response;
 
   const { teamId } = await params;
@@ -166,7 +166,7 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
 }
 
 export async function PATCH(request: NextRequest, { params }: RouteParams) {
-  const authResult = await requireAuth();
+  const authResult = await requireAuth(request);
   if (!authResult.ok) return authResult.response;
 
   const { teamId } = await params;

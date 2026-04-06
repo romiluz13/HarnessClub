@@ -20,10 +20,10 @@ const VALID_EVENTS: WebhookEvent[] = [
 ];
 
 export async function GET(
-  _request: NextRequest,
+  request: NextRequest,
   { params }: { params: Promise<{ orgId: string }> }
 ) {
-  const authResult = await requireAuth();
+  const authResult = await requireAuth(request);
   if (!authResult.ok) return authResult.response;
 
   const { orgId } = await params;
@@ -62,7 +62,7 @@ export async function POST(
   request: NextRequest,
   { params }: { params: Promise<{ orgId: string }> }
 ) {
-  const authResult = await requireAuth();
+  const authResult = await requireAuth(request);
   if (!authResult.ok) return authResult.response;
 
   const { orgId } = await params;

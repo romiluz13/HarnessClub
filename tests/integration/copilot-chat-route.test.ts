@@ -194,4 +194,40 @@ describe("POST /api/copilot/chat", () => {
     expect(stored[2].content).toBe("Continue from before");
     expect(stored[3].content).toContain("Continuing the conversation.");
   });
+
+  it("creates a fresh conversation when the provided conversationId is out of scope", async () => {
+    const foreignConversationId = await saveMessages(db, {
+      teamId: new ObjectId(),
+      userId: new ObjectId(),
+      messages: [{ role: "user", content: "Foreign thread", timestamp: new Date() }],
+    });
+
+    const route = await loadRouteWithFaux([
+      fauxAssistantMessage("Starting a fresh conversation."),
+    ]);
+
+    const request = new NextRequest("http://localhost/api/copilot/chat", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        message: "Start fresh even if I sent a stale conversation id",
+        context,
+        conversationId: foreignConversationId.toHexString(),
+      }),
+    });
+
+    const response = await route.POST(request);
+    const events = parseSse(await response.text());
+    const finalEvent = events.find((event) => event.event === "agent_end");
+    const returnedConversationId = String(finalEvent?.data.conversationId);
+
+    expect(returnedConversationId).not.toBe(foreignConversationId.toHexString());
+
+    const original = await loadConversation(db, foreignConversationId);
+    expect(original).toHaveLength(1);
+
+    const stored = await loadConversation(db, new ObjectId(returnedConversationId));
+    expect(stored).toHaveLength(2);
+    expect(stored[0].content).toBe("Start fresh even if I sent a stale conversation id");
+  });
 });

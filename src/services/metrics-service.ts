@@ -58,18 +58,13 @@ export async function computeMetrics(
 ): Promise<GoalMetric[]> {
   const now = new Date();
   const thirtyDaysAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
-  const sevenDaysAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
 
   // Parallel queries
-  const [assets, recentAuditCount, activeUserCount, totalMembers, exportCount] = await Promise.all([
+  const [assets, activeUserCount, totalMembers, exportCount] = await Promise.all([
     db.collection<AssetDocument>("assets")
       .find({ teamId: { $in: teamIds } })
       .project({ lastScan: 1, isPublished: 1, createdAt: 1, updatedAt: 1 })
       .toArray(),
-    db.collection("audit_logs").countDocuments({
-      teamId: { $in: teamIds },
-      timestamp: { $gte: sevenDaysAgo },
-    }),
     db.collection("audit_logs").aggregate([
       { $match: { teamId: { $in: teamIds }, timestamp: { $gte: thirtyDaysAgo } } },
       { $group: { _id: "$actorId" } },
@@ -118,10 +113,6 @@ export async function computeMetrics(
     ? Math.round((activeUserCount / totalMembers) * 100) : 0;
 
   // 4. Export count (30d)
-  // 5. Asset growth (new assets in 30d)
-  const newAssets = assets.filter((a) => a.createdAt >= thirtyDaysAgo).length;
-
-  // 6. Weekly activity (audit events per 7d)
 
   const metrics: GoalMetric[] = [
     {

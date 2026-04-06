@@ -10,12 +10,21 @@
 
 import type { Db } from "mongodb";
 import {
+  apiTokensValidator,
+  approvalRequestsValidator,
   assetsValidator,
   auditLogsValidator,
+  copilotConversationsValidator,
   departmentsValidator,
+  feedReadCursorsValidator,
+  mentionsValidator,
+  metricsSnapshotsValidator,
   organizationsValidator,
+  scimSyncStatusValidator,
+  ssoConfigsValidator,
   teamsValidator,
   usersValidator,
+  webhooksValidator,
 } from "./schema";
 import { EMBEDDING_DIMENSIONS } from "./voyage";
 
@@ -60,6 +69,15 @@ export async function setupDatabase(db: Db): Promise<void> {
     ensureCollection(db, "departments", departmentsValidator),
     ensureCollection(db, "activity", {}),
     ensureCollection(db, "audit_logs", auditLogsValidator),
+    ensureCollection(db, "api_tokens", apiTokensValidator),
+    ensureCollection(db, "approval_requests", approvalRequestsValidator),
+    ensureCollection(db, "copilot_conversations", copilotConversationsValidator),
+    ensureCollection(db, "metrics_snapshots", metricsSnapshotsValidator),
+    ensureCollection(db, "webhooks", webhooksValidator),
+    ensureCollection(db, "feed_read_cursors", feedReadCursorsValidator),
+    ensureCollection(db, "mentions", mentionsValidator),
+    ensureCollection(db, "sso_configs", ssoConfigsValidator),
+    ensureCollection(db, "scim_sync_status", scimSyncStatusValidator),
   ]);
 
   // Assets indexes — per pattern-polymorphic: type discriminator first in compound
@@ -136,6 +154,81 @@ export async function setupDatabase(db: Db): Promise<void> {
     auditLogs.createIndex({ targetId: 1, timestamp: -1 }, { name: "target_timestamp" }),
     // TTL index — auto-delete after 90 days (7776000 seconds)
     auditLogs.createIndex({ timestamp: 1 }, { name: "audit_ttl", expireAfterSeconds: 7776000 }),
+  ]);
+
+  // API tokens indexes — token validation is the hot path (every Bearer auth request)
+  const apiTokens = db.collection("api_tokens");
+  // Drop old 2-field token_validation index if key spec changed (Phase 2: extended to ESR with expiresAt)
+  try { await apiTokens.dropIndex("token_validation"); } catch (e: unknown) {
+    const code = (e as { code?: number }).code;
+    if (code !== 27) console.warn("dropIndex token_validation:", (e as Error).message);
+  }
+  await Promise.all([
+    // Primary: token validation (ESR: E=tokenHash+revoked, R=expiresAt for expiry check)
+    apiTokens.createIndex({ tokenHash: 1, revoked: 1, expiresAt: 1 }, { name: "token_validation" }),
+    // User's tokens list
+    apiTokens.createIndex({ userId: 1 }, { name: "user_tokens" }),
+  ]);
+
+  // Approval requests indexes
+  const approvalRequests = db.collection("approval_requests");
+  await Promise.all([
+    // Primary: lookup by asset + team + status (ESR: E=assetId+teamId, E=status)
+    approvalRequests.createIndex({ assetId: 1, teamId: 1, status: 1 }, { name: "asset_team_status" }),
+    // List pending approvals for a team (ESR: E=status+teamId, S=createdAt)
+    approvalRequests.createIndex({ status: 1, teamId: 1, createdAt: -1 }, { name: "status_team_created" }),
+  ]);
+
+  // Copilot conversations indexes
+  const copilotConversations = db.collection("copilot_conversations");
+  await Promise.all([
+    // Primary: user's conversations in a team sorted by recent (ESR: E=teamId+userId, S=updatedAt)
+    copilotConversations.createIndex({ teamId: 1, userId: 1, updatedAt: -1 }, { name: "team_user_updated" }),
+    // TTL index — auto-delete after 30 days (2592000 seconds)
+    copilotConversations.createIndex({ expiresAt: 1 }, { name: "conversation_ttl", expireAfterSeconds: 2592000 }),
+  ]);
+
+  // Metrics snapshots indexes — drop old index if key spec changed
+  const metricsSnapshots = db.collection("metrics_snapshots");
+  try { await metricsSnapshots.dropIndex("org_timestamp"); } catch (e: unknown) {
+    const code = (e as { code?: number }).code;
+    if (code !== 27) console.warn("dropIndex org_timestamp:", (e as Error).message);
+  }
+  await Promise.all([
+    // Primary: scope-based metrics by takenAt (ESR: E=scopeType+scopeId, S=takenAt)
+    metricsSnapshots.createIndex({ scopeType: 1, scopeId: 1, takenAt: -1 }, { name: "scope_takenAt" }),
+  ]);
+
+  // Webhooks indexes
+  const webhooks = db.collection("webhooks");
+  await Promise.all([
+    // Primary: team's webhooks
+    webhooks.createIndex({ teamId: 1 }, { name: "team_webhooks" }),
+  ]);
+
+  // Feed read cursors indexes — unique compound for upsert pattern
+  const feedReadCursors = db.collection("feed_read_cursors");
+  await Promise.all([
+    feedReadCursors.createIndex({ userId: 1, teamId: 1 }, { unique: true, name: "user_team_cursor" }),
+  ]);
+
+  // Mentions indexes — user's unread mentions sorted by recent
+  const mentions = db.collection("mentions");
+  await Promise.all([
+    // ESR: E=mentionedUserId+read, S=createdAt
+    mentions.createIndex({ mentionedUserId: 1, read: 1, createdAt: -1 }, { name: "user_read_created" }),
+  ]);
+
+  // SSO configs indexes — one config per org
+  const ssoConfigs = db.collection("sso_configs");
+  await Promise.all([
+    ssoConfigs.createIndex({ orgId: 1 }, { unique: true, name: "org_sso_unique" }),
+  ]);
+
+  // SCIM sync status indexes — one status per org
+  const scimSyncStatus = db.collection("scim_sync_status");
+  await Promise.all([
+    scimSyncStatus.createIndex({ orgId: 1 }, { unique: true, name: "org_scim_unique" }),
   ]);
 
   // Atlas Search + Vector Search indexes (idempotent — skips if already exists)
@@ -263,7 +356,7 @@ async function ensureSearchIndexes(db: Db): Promise<void> {
           },
         });
         console.log("AutoEmbed index created (M10+ mode)");
-      } catch (autoEmbedErr) {
+      } catch {
         // Expected on M0/local — autoEmbed is M10+ only
         console.log("AutoEmbed index not available (M0/local mode — using manual embeddings)");
       }

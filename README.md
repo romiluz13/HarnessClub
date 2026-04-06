@@ -1,6 +1,6 @@
 # AgentConfig
 
-**Enterprise-grade AI agent configuration management for teams.**
+**Open-source AI agent configuration and harness management for teams.**
 
 Manage skills, rules, agents, plugins, and MCP configs across your entire organization. Import from GitHub, export to any AI coding tool, enforce security policies, and maintain governance — all from a single platform.
 
@@ -23,35 +23,69 @@ Manage skills, rules, agents, plugins, and MCP configs across your entire organi
 
 ## Quick Start
 
-### Option 1: Docker (recommended)
+### 1. Choose your MongoDB mode
+
+- **MongoDB Atlas (recommended for full feature parity)**: best option for hybrid/vector search and production-like behavior.
+- **`mongodb-atlas-local:preview` (recommended local parity)**: use `docker-compose.atlas-local.yml` when you want Atlas Search and Vector Search locally.
+- **Plain MongoDB (`mongo:7`)**: works for core CRUD/import/export flows, but Atlas Search and Vector Search features are degraded or unavailable.
+
+### 2. Configure required environment variables
 
 ```bash
-git clone https://github.com/YOUR_ORG/agentconfig.git
-cd agentconfig
-cp .env.example .env
-# Edit .env — fill in NEXTAUTH_SECRET and GitHub OAuth credentials
-docker compose up
-# Visit http://localhost:3000
+cp .env.example .env.local
 ```
 
-### Option 2: Local development
+Fill in:
+
+- `MONGODB_URI`
+- `NEXTAUTH_SECRET`
+- `NEXTAUTH_URL`
+- `GITHUB_CLIENT_ID`
+- `GITHUB_CLIENT_SECRET`
+
+Optional but recommended:
+
+- `VOYAGE_API_KEY` for semantic/hybrid search
+- `COPILOT_*` provider variables for the AI copilot
+
+### 3. Start your database
+
+Atlas local preview:
 
 ```bash
-git clone https://github.com/YOUR_ORG/agentconfig.git
-cd agentconfig
-npm install
-cp .env.example .env.local
-# Edit .env.local — fill in required values
+docker compose -f docker-compose.atlas-local.yml up -d
+```
 
-# Start MongoDB (local or Atlas)
+Plain MongoDB:
+
+```bash
 docker compose up mongo -d
+```
 
-# Seed starter data
-npx tsx scripts/seed.ts
+### 4. Start the app
 
-# Start dev server
+```bash
+npm install
 npm run dev
 ```
+
+Open [http://localhost:3000](http://localhost:3000), sign in with GitHub, then create your organization and team.
+
+### 5. Verify the deployment
+
+```bash
+curl http://localhost:3000/api/health
+curl http://localhost:3000/api/v1
+```
+
+`/api/health` verifies the app and MongoDB connection. `/api/v1` exposes the public API discovery document.
+
+## Production Notes
+
+- This app uses Next.js standalone output. Build with `npm run build`, then run with `npm run start`.
+- `npm run start` expects a completed build and uses the standalone server output.
+- GitHub OAuth is required for interactive sign-in. The app can boot without OAuth, but the UI will intentionally block sign-in until the provider is configured.
+- If you use plain MongoDB instead of Atlas or atlas-local, text search still works, but Atlas Search / Vector Search capabilities will not match the full product experience.
 
 ## Architecture
 
@@ -79,17 +113,18 @@ src/
 └── types/            # TypeScript interfaces
 ```
 
-**Tech stack:** Next.js 15, MongoDB, Voyage AI, Pi Agent Framework, TypeScript (strict mode)
+**Tech stack:** Next.js 16, MongoDB, Voyage AI, Pi Agent Framework, TypeScript (strict mode)
 
 ## Testing
 
 ```bash
 npm run test               # Run all tests
+npm run test:live          # Real-provider copilot validation (requires live env vars)
 npm run typecheck           # TypeScript check
 node scripts/wiring-audit.mjs  # Verify no dead services
 ```
 
-All services have integration tests with real MongoDB round-trips. The wiring audit ensures every service file is reachable from at least one API route.
+The default test suite is deterministic and contains no hidden skips. `npm run test:live` is a separate, explicit live-provider lane for Grove/OpenAI-compatible copilot validation.
 
 ## Contributing
 

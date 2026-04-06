@@ -39,7 +39,7 @@ export function DiffViewer({ diff, fromLabel = "Before", toLabel = "After", clas
           <div className="overflow-x-auto">
             <pre className="text-xs leading-5">
               {leftLines.map((line, i) => (
-                <DiffLineRow key={i} line={line} side="left" />
+                <DiffLineRow key={i} line={line} />
               ))}
             </pre>
           </div>
@@ -53,7 +53,7 @@ export function DiffViewer({ diff, fromLabel = "Before", toLabel = "After", clas
           <div className="overflow-x-auto">
             <pre className="text-xs leading-5">
               {rightLines.map((line, i) => (
-                <DiffLineRow key={i} line={line} side="right" />
+                <DiffLineRow key={i} line={line} />
               ))}
             </pre>
           </div>
@@ -71,7 +71,7 @@ interface SideLine {
   lineNumber?: number;
 }
 
-function DiffLineRow({ line, side }: { line: SideLine; side: "left" | "right" }) {
+function DiffLineRow({ line }: { line: SideLine }) {
   if (line.type === "empty") {
     return <div className="h-5 bg-gray-100 dark:bg-gray-800" aria-hidden />;
   }

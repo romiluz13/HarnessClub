@@ -9,6 +9,9 @@ import { NextRequest, NextResponse } from "next/server";
 import { getDb } from "@/lib/db";
 import type { AssetDocument } from "@/types/asset";
 import { computeTrustScore } from "@/services/trust-score";
+import { getPublishedDistributionFilter } from "@/services/asset-service";
+import { getEffectiveReleaseStatus } from "@/types/asset";
+import { escapeRegex } from "@/lib/utils";
 
 export async function GET(request: NextRequest) {
   const { searchParams } = request.nextUrl;
@@ -18,8 +21,11 @@ export async function GET(request: NextRequest) {
   const db = await getDb();
 
   // Build filter: only published assets from marketplace-enabled teams
-  const filter: Record<string, unknown> = { isPublished: true };
-  if (typeFilter) filter.type = typeFilter;
+  const filter: Record<string, unknown> = {
+    ...getPublishedDistributionFilter(),
+  };
+  const additionalFilters: Record<string, unknown>[] = [];
+  if (typeFilter) additionalFilters.push({ type: typeFilter });
 
   // Get teams with marketplace enabled
   const marketplaceTeams = await db.collection("teams")
@@ -29,16 +35,25 @@ export async function GET(request: NextRequest) {
   const teamIds = marketplaceTeams.map((t) => t._id);
 
   if (teamIds.length > 0) {
-    filter.teamId = { $in: teamIds };
+    additionalFilters.push({ teamId: { $in: teamIds } });
+  } else {
+    additionalFilters.push({ _id: { $exists: false } });
   }
 
   // Text search if query provided
   if (q) {
-    filter.$or = [
-      { "metadata.name": { $regex: q, $options: "i" } },
-      { "metadata.description": { $regex: q, $options: "i" } },
-      { tags: { $regex: q, $options: "i" } },
-    ];
+    const escaped = escapeRegex(q);
+    additionalFilters.push({
+      $or: [
+        { "metadata.name": { $regex: escaped, $options: "i" } },
+        { "metadata.description": { $regex: escaped, $options: "i" } },
+        { tags: { $regex: escaped, $options: "i" } },
+      ],
+    });
+  }
+
+  if (additionalFilters.length > 0) {
+    filter.$and = additionalFilters;
   }
 
   const assets = await db.collection<AssetDocument>("assets")
@@ -61,6 +76,7 @@ export async function GET(request: NextRequest) {
       tags: a.tags ?? [],
       trustScore: (() => { const ts = computeTrustScore(a); return { grade: ts.grade, overall: ts.overall }; })(),
       installCount: a.stats?.installCount ?? 0,
+      releaseStatus: getEffectiveReleaseStatus(a),
     })),
   });
 }

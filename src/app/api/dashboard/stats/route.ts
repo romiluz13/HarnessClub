@@ -11,15 +11,15 @@
  * All data is REAL — from DB aggregation, not hardcoded.
  */
 
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { ObjectId } from "mongodb";
 import { getDb } from "@/lib/db";
 import { requireAuth } from "@/lib/api-helpers";
 import type { UserDocument } from "@/types/user";
 import type { AuditLogEntry } from "@/services/audit-service";
 
-export async function GET() {
-  const authResult = await requireAuth();
+export async function GET(request: NextRequest) {
+  const authResult = await requireAuth(request);
   if (!authResult.ok) return authResult.response;
 
   const db = await getDb();

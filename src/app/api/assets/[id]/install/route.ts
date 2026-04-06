@@ -13,6 +13,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { ObjectId } from "mongodb";
 import { getDb } from "@/lib/db";
 import type { AssetDocument } from "@/types/asset";
+import { isAssetPublishedForDistribution } from "@/types/asset";
 import { exportAsset, getAvailableTargets } from "@/services/exporters";
 import type { ExportTarget } from "@/services/exporters";
 
@@ -51,9 +52,9 @@ export async function GET(
     return NextResponse.json({ error: "Asset not found" }, { status: 404 });
   }
 
-  // Only published assets can be installed without auth
-  if (!asset.isPublished) {
-    return NextResponse.json({ error: "Asset is not published" }, { status: 403 });
+  // Only fully published assets can be installed without auth
+  if (!isAssetPublishedForDistribution(asset)) {
+    return NextResponse.json({ error: "Asset is not published for installation" }, { status: 403 });
   }
 
   const target: ExportTarget = "claude-code";
@@ -66,7 +67,23 @@ export async function GET(
       .find({ _id: { $in: asset.pluginConfig.bundledAssetIds } })
       .toArray();
 
+    const bundledAssetsById = new Map(bundledAssets.map((bundled) => [bundled._id.toHexString(), bundled]));
+    const missingBundledAssetIds = asset.pluginConfig.bundledAssetIds
+      .filter((bundledAssetId) => !bundledAssetsById.has(bundledAssetId.toHexString()))
+      .map((bundledAssetId) => bundledAssetId.toHexString());
+    const blockedBundledAssets: Array<{ id: string; name: string; releaseStatus?: string }> = [];
+    const unexportableBundledAssets: Array<{ id: string; name: string; type: string }> = [];
+
     for (const bundled of bundledAssets) {
+      if (!isAssetPublishedForDistribution(bundled)) {
+        blockedBundledAssets.push({
+          id: bundled._id.toHexString(),
+          name: bundled.metadata.name,
+          releaseStatus: bundled.releaseStatus,
+        });
+        continue;
+      }
+
       try {
         const exported = exportAsset(bundled, target);
         files.push({
@@ -75,8 +92,24 @@ export async function GET(
           type: bundled.type,
         });
       } catch {
-        // Skip assets that can't be exported to this target
+        unexportableBundledAssets.push({
+          id: bundled._id.toHexString(),
+          name: bundled.metadata.name,
+          type: bundled.type,
+        });
       }
+    }
+
+    if (missingBundledAssetIds.length > 0 || blockedBundledAssets.length > 0 || unexportableBundledAssets.length > 0) {
+      return NextResponse.json(
+        {
+          error: "Plugin bundle is incomplete and cannot be installed.",
+          missingBundledAssetIds,
+          blockedBundledAssets,
+          unexportableBundledAssets,
+        },
+        { status: 409 }
+      );
     }
 
     // Add the plugin manifest itself

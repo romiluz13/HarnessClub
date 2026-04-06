@@ -1,4 +1,4 @@
-import { defineConfig } from "vitest/config";
+import { configDefaults, defineConfig } from "vitest/config";
 import path from "path";
 import dotenv from "dotenv";
 
@@ -9,6 +9,7 @@ export default defineConfig({
   test: {
     globals: true,
     include: ["tests/**/*.test.ts", "tests/**/*.test.tsx"],
+    exclude: [...configDefaults.exclude, "tests/**/*-live.test.ts"],
     globalSetup: ["tests/helpers/global-setup.ts"],
     testTimeout: 150000,
     hookTimeout: 60000,

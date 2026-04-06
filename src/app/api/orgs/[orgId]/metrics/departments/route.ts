@@ -10,10 +10,10 @@ import { requireAuth } from "@/lib/api-helpers";
 import { compareDepartments } from "@/services/metrics-service";
 
 export async function GET(
-  _request: NextRequest,
+  request: NextRequest,
   { params }: { params: Promise<{ orgId: string }> }
 ) {
-  const authResult = await requireAuth();
+  const authResult = await requireAuth(request);
   if (!authResult.ok) return authResult.response;
 
   const { orgId: orgIdStr } = await params;

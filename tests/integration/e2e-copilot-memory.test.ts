@@ -138,11 +138,31 @@ describe("Conversation Memory (real DB)", () => {
     expect(history[2].content).toBe("Find my skills");
   });
 
+  it("creates a new conversation when the requested append target is out of scope", async () => {
+    const foreignConversationId = await saveMessages(db, {
+      teamId: new ObjectId(),
+      userId: new ObjectId(),
+      messages: [{ role: "user", content: "foreign", timestamp: new Date() }],
+    });
+
+    const newConversationId = await saveMessages(db, {
+      teamId,
+      userId,
+      conversationId: foreignConversationId,
+      messages: [{ role: "assistant", content: "fresh thread", timestamp: new Date() }],
+    });
+
+    expect(newConversationId.equals(foreignConversationId)).toBe(false);
+    expect(await loadConversation(db, foreignConversationId)).toHaveLength(1);
+    expect(await loadConversation(db, newConversationId)).toHaveLength(1);
+  });
+
   it("listConversations returns recent conversations", async () => {
     const list = await listConversations(db, teamId, userId);
     expect(list.length).toBeGreaterThanOrEqual(1);
-    expect(list[0].title).toBe("Hello copilot");
-    expect(list[0].messageCount).toBe(4);
+    const originalConversation = list.find((conversation) => conversation.title === "Hello copilot");
+    expect(originalConversation).toBeDefined();
+    expect(originalConversation?.messageCount).toBe(4);
   });
 
   it("deleteConversation removes it", async () => {
@@ -167,6 +187,30 @@ describe("Conversation Memory (real DB)", () => {
     expect(doc!.expiresAt).toBeInstanceOf(Date);
     const thirtyDays = 30 * 24 * 60 * 60 * 1000;
     expect(doc!.expiresAt.getTime()).toBeGreaterThan(Date.now() + thirtyDays - 60000);
+  });
+
+  it("listConversations handles missing messages field gracefully ($ifNull guard)", async () => {
+    // Insert a doc with no messages field to simulate legacy/corrupted data
+    const noMsgId = new ObjectId();
+    await db.collection("copilot_conversations").insertOne({
+      _id: noMsgId,
+      teamId,
+      userId,
+      title: "No messages doc",
+      createdAt: new Date(),
+      updatedAt: new Date(),
+      expiresAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
+      // Intentionally omit messages field
+    });
+
+    // listConversations should NOT throw — $ifNull guard on $size
+    const list = await listConversations(db, teamId, userId);
+    const noMsgEntry = list.find((c) => c.title === "No messages doc");
+    expect(noMsgEntry).toBeDefined();
+    expect(noMsgEntry?.messageCount).toBe(0);
+
+    // Cleanup
+    await db.collection("copilot_conversations").deleteOne({ _id: noMsgId });
   });
 });
 

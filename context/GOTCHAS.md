@@ -2,6 +2,84 @@
 
 > Things that bit us. Read this before every task to avoid repeating mistakes.
 
+### Bare `npx` in Codex MCP config can make healthy stdio servers look broken — 2026-04-06
+**Symptom**: MCP servers like `octocode` or `mongodb-mcp-server` appear unavailable from Codex even though they are installed and work when launched manually.
+**Root Cause**: The Codex desktop/app shell in this environment does not expose Homebrew Node binaries on `PATH`, and Homebrew `npx` itself depends on `#!/usr/bin/env node`. A config like `command = "npx"` therefore fails before the MCP server ever starts. Also, editing `~/.codex/config.toml` does not retrofit the already-running app session.
+**Fix**: Use an absolute command such as `/opt/homebrew/bin/npx`, add an explicit Node-capable `PATH` in the MCP server env, and then restart/reload Codex so the live session picks up the new config.
+**Prevention**: For local stdio MCP servers launched through Node tooling on macOS, never assume the Codex app PATH matches your terminal PATH. Prefer absolute Homebrew binaries plus explicit `PATH` in `~/.codex/config.toml`.
+
+### Standalone `npm run start` can look healthy while serving an unstyled app locally — Manual QA Prep (2026-04-05)
+**Symptom**: `node .next/standalone/server.js` starts, `/api/health` returns `ok`, and HTML pages load, but the interface appears unstyled because the CSS chunk 404s.
+**Root Cause**: The standalone runtime expects the built static assets to be available from the standalone artifact layout, but the local start flow in this worktree does not currently serve the CSS chunk correctly.
+**Fix**: For local manual QA, use `npx next start` against the built app until the standalone static-asset path is fixed.
+**Prevention**: Do not treat `health ok` + HTML response as enough for runtime signoff. Always check at least one real CSS asset URL and one browser screenshot on the actual documented start command.
+
+### A merged Vitest config can accidentally keep excluding the very live tests you are trying to restore — 2026-04-05
+**Symptom**: `npm run test:live` still says “No test files found” even though the command explicitly targets the live files.
+**Root Cause**: The base `vitest.config.ts` excludes `tests/**/*-live.test.ts`, and a merged config inherits that exclusion unless you replace it with a fully standalone live config.
+**Fix**: Give the live lane its own `vitest.live.config.ts` instead of trying to partially override the base exclude list.
+**Prevention**: When splitting deterministic and live suites, assume excludes are sticky and verify the explicit live runner actually discovers the intended files.
+
+### Failing live-test env checks in `beforeAll()` can still show skipped tests — 2026-04-05
+**Symptom**: A live suite fails with the right missing-env error, but Vitest still reports the inner tests as skipped.
+**Root Cause**: The failure happens after test registration, so the suite errors out during setup while the contained tests remain marked as not run.
+**Fix**: Move required live-env assertions to module scope for explicit live suites that should fail immediately when misconfigured.
+**Prevention**: If “skip = fail” is part of the repo discipline, fail live-test configuration before `describe()`/`it()` registration, not inside hooks.
+
+### Hydration-safe browser preferences are an external-store problem, not a render-time read — Trust-Floor Slice 2 (2026-04-05)
+**Symptom**: A client component wants to honor `localStorage` on first load, but reading it during render causes hydration mismatch risk, while reading it in an effect triggers `react-hooks/set-state-in-effect`.
+**Root Cause**: Persisted browser preferences like sidebar collapse state are external browser state, not ordinary React initialization data.
+**Fix**: Model the preference with `useSyncExternalStore`, a snapshot getter, and a small subscribe/dispatch mechanism instead of render-time reads or `setState()` inside an effect.
+**Prevention**: For SSR-rendered client components, treat `localStorage`/`sessionStorage` as external stores whenever their value changes visible markup.
+
+### Type-only imports cannot power runtime validation — Warning Cleanup (2026-04-05)
+**Symptom**: `tsc` fails even though lint is green, complaining that a symbol like `ASSET_TYPES` “cannot be used as a value because it was imported using import type”.
+**Root Cause**: A cleanup or refactor turns a previously type-only symbol into a runtime value for validation or branching, but the import stays `import type`.
+**Fix**: Split the import into runtime + type forms (for example `import { ASSET_TYPES } ...` and `import type { AssetType } ...`).
+**Prevention**: Any time a warning cleanup promotes an imported symbol from “dead import” into real runtime logic, re-check whether the import must stop being type-only.
+
+### Live route tests rot when auth-helper mocks don’t evolve with route authorization logic — 2026-04-05
+**Symptom**: A live route test fails before reaching the real external provider, complaining that an export like `isTeamMember` is missing from the mocked `@/lib/api-helpers` module.
+**Root Cause**: The route gained stricter authorization logic, but the test’s partial module mock still only provided the older helper surface.
+**Fix**: Keep live route mocks minimal but complete for the current route path. If the route now checks `isTeamMember`, add that helper explicitly in the test mock.
+**Prevention**: Whenever route authorization logic is tightened, audit live/integration tests for partial helper mocks that may now be stale.
+
+### Live embedding seed helpers need retries or they become false-red CI gates — Release-State Recovery (2026-04-05)
+**Symptom**: The full integration suite fails in a capabilities seed helper with `fetch failed` / `UND_ERR_CONNECT_TIMEOUT` against `api.voyageai.com`, even though the app code and local DB behavior are healthy.
+**Root Cause**: The capabilities seed helper made a single live Voyage embeddings request and treated any transient network timeout as a hard suite failure.
+**Fix**: Add a short retry loop with timeout control around the live embeddings fetch so transient provider/network stalls do not turn the whole gate red.
+**Prevention**: Keep live external-provider validation, but never make a broad integration suite depend on a single no-retry network call.
+
+### Release-state rollouts can look “architecturally right” while still breaking the lifecycle — Skeptical Review (2026-04-05)
+**Symptom**: A new approval/release-state model seems to add governance, but edited published assets disappear from marketplace/install flows or approval outcomes do not restore the expected public state.
+**Root Cause**: The state machine is only partially wired: one route/service demotes edited assets out of published state, another maps approved `update` requests to `approved` instead of `published`, and public distribution filters already depend on the new state.
+**Fix**: Model the full release lifecycle explicitly before rollout: what happens to a published asset when edited, what state an approved update should land in, and which states are considered distributable.
+**Prevention**: Treat release-state work as a state-machine migration, not a field-addition refactor. Require end-to-end tests for create → edit → request review → approve/reject → marketplace/install visibility.
+
+### Bundle integrity must fail loudly, not degrade silently — Skeptical Review (2026-04-05)
+**Symptom**: Plugin install returns `200`, but some bundled assets are silently missing from the payload.
+**Root Cause**: The install route skips unpublished bundled assets instead of treating missing/non-distributable children as a bundle integrity failure.
+**Fix**: Either fail the whole install with a clear error or include explicit missing-child diagnostics in the response.
+**Prevention**: For bundle/distribution surfaces, never silently omit required children and still claim success.
+
+### Scoped authorization filters can turn updates into silent no-ops — Skeptical Review (2026-04-05)
+**Symptom**: A route returns success with the original `conversationId`, but the new messages never appear in history.
+**Root Cause**: `updateOne()` was tightened with `teamId`/`userId` scope filters, but the caller does not check `matchedCount`. If the conversation is valid but out of scope, the write matches 0 documents and silently does nothing.
+**Fix**: Whenever a scoped update is introduced for security, explicitly handle the `matchedCount === 0` case by either failing fast or creating a new in-scope record.
+**Prevention**: Do not assume “more secure query filter” automatically preserves previous behavior. Security fixes that narrow write scope must also define the no-match runtime behavior.
+
+### Env-gated backend providers must be reflected in the UI — Skeptical Review (2026-04-05)
+**Symptom**: The app boots without GitHub OAuth configured, but users still see a GitHub sign-in button that fails at click time.
+**Root Cause**: Backend provider registration was made conditional, but the sign-in UI still assumes GitHub is always available.
+**Fix**: Expose provider availability to the sign-in surface or fail earlier with an install/setup message.
+**Prevention**: Whenever an integration becomes optional at module init, audit the UI for hardcoded assumptions about that integration.
+
+### Proxy comments can drift into false security claims — Skeptical Review (2026-04-05)
+**Symptom**: A proxy file claims CORS restriction and hardened rate limiting, but the actual code only sets generic security headers and uses process-local counters.
+**Root Cause**: The comments describe the intended security posture, not the implementation actually present in the file.
+**Fix**: Keep proxy comments implementation-specific, and treat global/shared-state rate limiting in Proxy as best-effort only unless enforced by an upstream reverse proxy or shared store.
+**Prevention**: For security-sensitive infrastructure files, review comments with the same skepticism as code.
+
 ### Atlas Local Preview can get stuck in a bad startup state after prior failures — 2026-04-05
 **Symptom**: The Atlas Local Preview container starts but the app/test connection to `localhost:27018` is refused or the internal runner reports replica-state / primary-readiness issues before reaching healthy.
 **Root Cause**: A stale local Atlas preview volume or partially initialized replica state can survive a failed boot and keep the next startup from converging cleanly.
@@ -134,5 +212,11 @@
 **Root Cause**: Turbopack bundles `@mariozechner/pi-ai` into the server chunk and rewrites its internal dynamic provider/runtime imports into broken module stubs.
 **Fix**: Add `@mariozechner/pi-ai` and `@mariozechner/pi-agent-core` to `serverExternalPackages` in `next.config.ts`.
 **Prevention**: When a server-only SDK performs dynamic runtime/provider loading, externalize it from the Next standalone server bundle instead of trying to bundle it.
+
+### Auth.js standalone smoke can fail with UntrustedHost — Final Release Gate
+**Symptom**: The built standalone server starts, but the first auth/session request logs `UntrustedHost: Host must be trusted` even when `NEXTAUTH_URL` is set.
+**Root Cause**: Auth.js requires explicit host trust in self-hosted/runtime deployments that rely on the incoming `Host` header.
+**Fix**: Set `trustHost: true` in `src/lib/auth.ts`.
+**Prevention**: Always include a real standalone runtime smoke in the release gate for Auth.js apps; `next build` alone will not surface host-trust issues.
 
 (More gotchas will be added as development progresses)

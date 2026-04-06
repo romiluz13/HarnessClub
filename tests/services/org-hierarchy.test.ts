@@ -16,8 +16,7 @@ import {
   isOrgRoleAtLeast,
   isValidOrgRole,
 } from "@/lib/rbac";
-import type { OrgRole } from "@/types/team";
-import { DEPARTMENT_TYPES, type DepartmentType } from "@/types/organization";
+import { DEPARTMENT_TYPES } from "@/types/organization";
 
 describe("Department Templates", () => {
   it("provides templates for all 8 non-custom types", () => {

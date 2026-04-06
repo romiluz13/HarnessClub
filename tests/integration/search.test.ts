@@ -16,7 +16,6 @@ import { generateEmbedding } from "../../src/lib/voyage";
  * test runs find it immediately without waiting for index sync.
  */
 const FIXTURE_SKILL_ID = new ObjectId("aaa111bbb222ccc333ddd444");
-const FIXTURE_TEAM_ID = new ObjectId("fff666eee555ddd444ccc333");
 
 const POLL_INTERVAL_MS = 3_000;
 const MAX_POLL_MS = 120_000; // 120s — M0 free tier can be slow to index

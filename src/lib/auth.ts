@@ -14,12 +14,20 @@ import { MongoDBAdapter } from "@auth/mongodb-adapter";
 import { ObjectId } from "mongodb";
 import { getClientPromise, getDb, isMongoConfigured } from "@/lib/db";
 
+export interface AuthProviderDescriptor {
+  id: "github";
+  label: string;
+}
+
 const hasGitHubOAuth = Boolean(process.env.GITHUB_CLIENT_ID && process.env.GITHUB_CLIENT_SECRET);
 const authAdapter = isMongoConfigured()
   ? MongoDBAdapter(getClientPromise(), {
     databaseName: process.env.MONGODB_DB_NAME || "skillshub",
   })
   : undefined;
+const configuredAuthProviders: AuthProviderDescriptor[] = hasGitHubOAuth
+  ? [{ id: "github", label: "GitHub" }]
+  : [];
 const authProviders = hasGitHubOAuth
   ? [
     GitHub({
@@ -28,6 +36,10 @@ const authProviders = hasGitHubOAuth
     }),
   ]
   : [];
+
+export function getConfiguredAuthProviders(): AuthProviderDescriptor[] {
+  return configuredAuthProviders;
+}
 
 /**
  * Auth.js configuration with GitHub OAuth.
@@ -40,6 +52,9 @@ const authProviders = hasGitHubOAuth
 export const { handlers, signIn, signOut, auth } = NextAuth({
   adapter: authAdapter,
   providers: authProviders,
+  // Auth.js relies on the incoming Host header for callback/session URLs.
+  // Per the official Auth.js docs, self-hosted deployments should set this explicitly.
+  trustHost: true,
   session: {
     strategy: "jwt",
     maxAge: 30 * 24 * 60 * 60, // 30 days
@@ -91,14 +106,12 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
     async session({ session, token }) {
       if (session.user) {
         session.user.id = token.userId as string;
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const s = session as any;
-        s.activeOrgId = token.activeOrgId;
-        s.activeTeamId = token.activeTeamId;
-        s.orgRole = token.orgRole;
-        s.teamRole = token.teamRole;
-        s.hasOrg = token.hasOrg;
       }
+      session.activeOrgId = token.activeOrgId as string | undefined;
+      session.activeTeamId = token.activeTeamId as string | undefined;
+      session.orgRole = token.orgRole as string | undefined;
+      session.teamRole = token.teamRole as string | undefined;
+      session.hasOrg = token.hasOrg as boolean | undefined;
       return session;
     },
   },

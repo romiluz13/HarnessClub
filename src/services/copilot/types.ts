@@ -8,7 +8,6 @@
  * Per typescript-advanced-types: discriminated unions for tool calls.
  */
 
-import type { ObjectId } from "mongodb";
 import type { AssetType } from "@/types/asset";
 import type { ExportTarget } from "@/services/exporters/types";
 

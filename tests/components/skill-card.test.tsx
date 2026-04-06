@@ -57,10 +57,10 @@ describe("SkillCard", () => {
     expect(screen.getByText("342")).toBeInTheDocument();
   });
 
-  it("card is a clickable link to skill detail", () => {
+  it("card is a clickable link to asset detail", () => {
     render(<SkillCard {...SKILL_PROPS} />);
     const link = screen.getByRole("link");
-    expect(link).toHaveAttribute("href", expect.stringContaining("abc123"));
+    expect(link).toHaveAttribute("href", "/dashboard/assets/abc123");
   });
 
   it("shows draft badge when unpublished", () => {

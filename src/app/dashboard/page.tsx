@@ -70,7 +70,7 @@ export default async function DashboardPage() {
     db.collection("assets").countDocuments({ teamId }),
     db.collection("teams").findOne({ _id: teamId }),
     db.collection("teams").countDocuments({ orgId }),
-    db.collection("approvals").countDocuments({ teamId, status: "pending" }),
+    db.collection("approval_requests").countDocuments({ teamId, status: "pending" }),
   ]);
 
   const memberCount = team?.memberIds?.length ?? 1;

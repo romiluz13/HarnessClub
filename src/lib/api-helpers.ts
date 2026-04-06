@@ -5,13 +5,15 @@
  * Used by /api/skills and /api/assets routes.
  */
 
+import { headers } from "next/headers";
 import { NextResponse } from "next/server";
 import { ObjectId } from "mongodb";
 import type { Db } from "mongodb";
 import { auth } from "@/lib/auth";
 import { getDb } from "@/lib/db";
-import type { AssetDocument, AssetType } from "@/types/asset";
+import type { AssetDocument, AssetType, ReleaseStatus } from "@/types/asset";
 import { computeTrustScore } from "@/services/trust-score";
+import { getEffectiveReleaseStatus } from "@/types/asset";
 import { validateApiToken } from "@/services/api-token-service";
 import type { OrgRole, TeamRole } from "@/types/team";
 
@@ -28,6 +30,7 @@ export interface AssetResponse {
   installCount: number;
   viewCount: number;
   isPublished: boolean;
+  releaseStatus: ReleaseStatus;
   trustScore?: { overall: number; grade: string } | null;
   createdAt: string;
   updatedAt: string;
@@ -47,6 +50,7 @@ export function serializeAsset(doc: AssetDocument): AssetResponse {
     installCount: doc.stats?.installCount ?? 0,
     viewCount: doc.stats?.viewCount ?? 0,
     isPublished: doc.isPublished,
+    releaseStatus: getEffectiveReleaseStatus(doc),
     trustScore: (() => { const ts = computeTrustScore(doc); return { overall: ts.overall, grade: ts.grade }; })(),
     createdAt: doc.createdAt.toISOString(),
     updatedAt: doc.updatedAt.toISOString(),
@@ -60,7 +64,19 @@ export type AuthResult =
 
 /** Check authentication — returns userId or 401 response */
 export async function requireAuth(request?: Pick<Request, "headers">): Promise<AuthResult> {
-  const authHeader = request?.headers.get("authorization");
+  const authHeader = await (async () => {
+    if (request) {
+      return request.headers.get("authorization");
+    }
+
+    try {
+      const headerStore = await headers();
+      return headerStore.get("authorization");
+    } catch {
+      return null;
+    }
+  })();
+
   if (authHeader?.startsWith("Bearer ")) {
     const token = authHeader.slice("Bearer ".length).trim();
     if (!token) {

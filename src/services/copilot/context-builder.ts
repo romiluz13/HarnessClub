@@ -8,7 +8,7 @@
  * 4. Behavioral guidelines
  */
 
-import type { CopilotContext, CopilotToolName, COPILOT_TOOLS } from "./types";
+import type { CopilotContext, CopilotToolName } from "./types";
 
 /** Tool descriptions for the system prompt */
 const TOOL_DESCRIPTIONS: Record<CopilotToolName, string> = {

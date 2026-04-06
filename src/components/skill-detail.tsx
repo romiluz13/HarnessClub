@@ -49,7 +49,7 @@ interface VersionsResponse {
 
 const fetcher = (url: string) =>
   fetch(url).then((r) => {
-    if (!r.ok) throw new Error(r.status === 404 ? "Skill not found" : "Failed to load skill");
+    if (!r.ok) throw new Error(r.status === 404 ? "Asset not found" : "Failed to load asset");
     return r.json() as Promise<SkillData>;
   });
 
@@ -59,7 +59,7 @@ interface SkillDetailProps {
 
 export function SkillDetail({ skillId }: SkillDetailProps) {
   const router = useRouter();
-  const { data: skill, error, isLoading, mutate: mutateSkill } = useSWR(`/api/skills/${skillId}`, fetcher);
+  const { data: skill, error, isLoading, mutate: mutateSkill } = useSWR(`/api/assets/${skillId}`, fetcher);
   const { data: versionsData, mutate: mutateVersions } = useSWR<VersionsResponse>(
     skill ? `/api/assets/${skillId}/versions?limit=20&includeDiffs=true` : null,
     (url: string) => fetch(url).then((r) => r.json())
@@ -82,10 +82,10 @@ export function SkillDetail({ skillId }: SkillDetailProps) {
         <AlertCircle className="mx-auto h-8 w-8 text-red-400" />
         <h3 className="mt-3 text-sm font-medium text-red-800">{error.message}</h3>
         <button
-          onClick={() => router.push("/dashboard/skills")}
+          onClick={() => router.push("/dashboard/assets")}
           className="mt-4 cursor-pointer text-sm text-red-600 hover:text-red-800 underline"
         >
-          Back to skills
+          Back to assets
         </button>
       </div>
     );
@@ -105,9 +105,9 @@ export function SkillDetail({ skillId }: SkillDetailProps) {
       {/* Back + header */}
       <div className="flex items-center gap-3">
         <Link
-          href="/dashboard/skills"
+          href="/dashboard/assets"
           className="flex h-9 w-9 cursor-pointer items-center justify-center rounded-md text-gray-500 hover:bg-gray-100 hover:text-gray-900 transition-colors"
-          aria-label="Back to skills"
+          aria-label="Back to assets"
         >
           <ArrowLeft className="h-4 w-4" />
         </Link>

@@ -31,6 +31,40 @@ export const ASSET_TYPES = [
 
 export type AssetType = (typeof ASSET_TYPES)[number];
 
+export const RELEASE_STATUSES = [
+  "draft",
+  "pending_review",
+  "approved",
+  "published",
+  "archived",
+] as const;
+
+export type ReleaseStatus = (typeof RELEASE_STATUSES)[number];
+
+export function getDraftReleaseStatus(): ReleaseStatus {
+  return "draft";
+}
+
+export function isPublishedReleaseStatus(status: ReleaseStatus): boolean {
+  return status === "published";
+}
+
+export function getEffectiveReleaseStatus(
+  asset: Pick<AssetBase, "isPublished"> & Partial<Pick<AssetBase, "releaseStatus">>
+): ReleaseStatus {
+  if (asset.releaseStatus) {
+    return asset.releaseStatus;
+  }
+
+  return asset.isPublished ? "published" : getDraftReleaseStatus();
+}
+
+export function isAssetPublishedForDistribution(
+  asset: Pick<AssetBase, "isPublished"> & Partial<Pick<AssetBase, "releaseStatus">>
+): boolean {
+  return asset.isPublished && isPublishedReleaseStatus(getEffectiveReleaseStatus(asset));
+}
+
 /** Shared metadata present on every asset */
 export interface AssetMetadata {
   /** Asset display name */
@@ -88,6 +122,8 @@ export interface AssetBase {
   stats: { installCount: number; viewCount: number };
   /** Whether this asset is published to the team's marketplace */
   isPublished: boolean;
+  /** Explicit release state used for approval/publish/install governance */
+  releaseStatus: ReleaseStatus;
   /** Latest security scan result (Phase 12) */
   lastScan?: {
     safe: boolean;
@@ -207,6 +243,7 @@ export interface CreateAssetInput {
   tags: string[];
   source?: AssetSource;
   isPublished?: boolean;
+  releaseStatus?: ReleaseStatus;
   createdBy: ObjectId;
   /** Type-specific config — validated at runtime per type */
   agentConfig?: AgentAsset["agentConfig"];

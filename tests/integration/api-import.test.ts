@@ -12,12 +12,7 @@ import {
   seedCapabilitiesData,
   cleanCapabilitiesData,
   TEAM_A_ID,
-  TEAM_B_ID,
   USER_OWNER_ID,
-  USER_ADMIN_ID,
-  USER_MEMBER_ID,
-  USER_VIEWER_ID,
-  CAP_TEST_MARKER,
 } from "../helpers/seed-capabilities";
 import { hasPermission } from "../../src/lib/rbac";
 

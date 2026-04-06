@@ -10,10 +10,10 @@ import { requireAuth } from "@/lib/api-helpers";
 import { getMetricsReport } from "@/services/metrics-service";
 
 export async function GET(
-  _request: NextRequest,
+  request: NextRequest,
   { params }: { params: Promise<{ orgId: string }> }
 ) {
-  const authResult = await requireAuth();
+  const authResult = await requireAuth(request);
   if (!authResult.ok) return authResult.response;
 
   const { orgId: orgIdStr } = await params;
@@ -24,7 +24,7 @@ export async function GET(
   const db = await getDb();
   const orgId = new ObjectId(orgIdStr);
 
-  const org = await db.collection("orgs").findOne({ _id: orgId });
+  const org = await db.collection("organizations").findOne({ _id: orgId });
   if (!org) {
     return NextResponse.json({ error: "Organization not found" }, { status: 404 });
   }

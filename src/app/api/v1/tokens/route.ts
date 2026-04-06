@@ -15,8 +15,8 @@ import { createApiToken, listUserTokens, type TokenScope, type TokenType } from 
 const VALID_SCOPES: TokenScope[] = ["read", "write", "admin"];
 const VALID_TYPES: TokenType[] = ["personal", "service_account"];
 
-export async function GET() {
-  const authResult = await requireAuth();
+export async function GET(request: NextRequest) {
+  const authResult = await requireAuth(request);
   if (!authResult.ok) return authResult.response;
 
   const db = await getDb();
@@ -39,7 +39,7 @@ export async function GET() {
 }
 
 export async function POST(request: NextRequest) {
-  const authResult = await requireAuth();
+  const authResult = await requireAuth(request);
   if (!authResult.ok) return authResult.response;
 
   let body: Record<string, unknown>;

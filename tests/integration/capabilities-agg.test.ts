@@ -9,13 +9,12 @@
  */
 
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
-import { ObjectId, type Db } from "mongodb";
+import type { Db } from "mongodb";
 import { getTestDb, closeTestDb } from "../helpers/db-setup";
 import {
   seedCapabilitiesData,
   cleanCapabilitiesData,
   TEAM_A_ID,
-  TEAM_B_ID,
   SKILL_IDS,
   USER_OWNER_ID,
   CAP_TEST_MARKER,

@@ -8,11 +8,12 @@
  *        recommend_harness, scan_asset
  */
 
-import { Type, type Static } from "@sinclair/typebox";
+import { Type } from "@sinclair/typebox";
 import type { AgentTool, AgentToolResult } from "@mariozechner/pi-agent-core";
 import { ObjectId, type Db } from "mongodb";
 import type { AssetDocument } from "@/types/asset";
 import type { CopilotContext } from "./types";
+import { escapeRegex } from "@/lib/utils";
 
 // ─── Shared helper ──────────────────────────────────────────
 
@@ -40,7 +41,7 @@ export function createSearchTool(db: Db, context: CopilotContext): AgentTool<typ
       const filter: Record<string, unknown> = {};
       if (context.teamId) filter.teamId = new ObjectId(context.teamId);
       if (args.type) filter.type = args.type;
-      const searchRegex = new RegExp(args.query.split(/\s+/).join("|"), "i");
+      const searchRegex = new RegExp(args.query.split(/\s+/).map(escapeRegex).join("|"), "i");
       filter.searchText = { $regex: searchRegex };
 
       const assets = await db.collection<AssetDocument>("assets")

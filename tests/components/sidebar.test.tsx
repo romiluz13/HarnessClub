@@ -6,8 +6,8 @@
  * @vitest-environment jsdom
  */
 
-import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen } from "@testing-library/react";
+import { beforeEach, describe, it, expect, vi } from "vitest";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import "@testing-library/jest-dom/vitest";
 
 // Mock localStorage for sidebar collapse persistence
@@ -46,6 +46,11 @@ vi.mock("next-auth/react", () => ({
 import { Sidebar } from "../../src/components/sidebar";
 
 describe("Sidebar", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    localStorageMock.getItem.mockReturnValue(null);
+  });
+
   it("renders navigation links", () => {
     render(<Sidebar />);
     // Should have nav links for Skills, Teams, Search, Settings
@@ -89,5 +94,22 @@ describe("Sidebar", () => {
       // Each nav link should have padding/height for accessibility
       expect(link).toBeVisible();
     });
+  });
+
+  it("applies the persisted collapsed state after hydration", async () => {
+    localStorageMock.getItem.mockReturnValue("true");
+
+    render(<Sidebar />);
+
+    await waitFor(() => {
+      expect(screen.queryByText("AgentConfig")).not.toBeInTheDocument();
+    });
+  });
+
+  it("persists collapse toggles to localStorage", () => {
+    render(<Sidebar />);
+
+    fireEvent.click(screen.getByRole("button", { name: /collapse sidebar/i }));
+    expect(localStorageMock.setItem).toHaveBeenCalledWith("skillshub-sidebar-collapsed", "true");
   });
 });

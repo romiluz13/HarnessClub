@@ -20,13 +20,13 @@ interface VersionTimelineProps {
   className?: string;
 }
 
-export function VersionTimeline({
-  assetId,
-  versions,
-  currentVersionNumber,
-  onRollback,
-  className = "",
-}: VersionTimelineProps) {
+export function VersionTimeline(props: VersionTimelineProps) {
+  const {
+    versions,
+    currentVersionNumber,
+    onRollback,
+    className = "",
+  } = props;
   const [expandedVersion, setExpandedVersion] = useState<number | null>(null);
   const [rolling, setRolling] = useState(false);
   const [rollbackConfirm, setRollbackConfirm] = useState<number | null>(null);

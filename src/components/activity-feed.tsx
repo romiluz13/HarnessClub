@@ -17,7 +17,6 @@ import {
   Shield,
   Building,
   Loader2,
-  AtSign,
   ChevronDown,
   ChevronUp,
   Bell,

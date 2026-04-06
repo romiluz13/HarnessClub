@@ -18,7 +18,7 @@ interface MobileNavProps {
 
 const NAV_ITEMS = [
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
-  { href: "/dashboard/skills", label: "Skills", icon: Puzzle },
+  { href: "/dashboard/assets", label: "Assets", icon: Puzzle },
   { href: "/dashboard/teams", label: "Teams", icon: Users },
   { href: "/dashboard/settings", label: "Settings", icon: Settings },
 ];

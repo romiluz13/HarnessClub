@@ -1,9 +1,9 @@
 /**
- * Skill detail page — server component wrapper.
- * SkillDetail client component handles data fetching + editing.
+ * Legacy skills detail route.
+ * Redirects to the canonical asset detail page.
  */
 
-import { SkillDetail } from "@/components/skill-detail";
+import { redirect } from "next/navigation";
 
 export default async function SkillDetailPage({
   params,
@@ -11,10 +11,5 @@ export default async function SkillDetailPage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
-
-  return (
-    <div className="space-y-6">
-      <SkillDetail skillId={id} />
-    </div>
-  );
+  redirect(`/dashboard/assets/${id}`);
 }

@@ -7,7 +7,7 @@
  */
 
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
-import { ObjectId, type Db } from "mongodb";
+import type { Db } from "mongodb";
 import { getTestDb, closeTestDb } from "../helpers/db-setup";
 import {
   seedCapabilitiesData,

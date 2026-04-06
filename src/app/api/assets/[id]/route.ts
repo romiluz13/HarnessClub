@@ -9,8 +9,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { ObjectId } from "mongodb";
 import { getDb } from "@/lib/db";
-import type { AssetDocument } from "@/types/asset";
-import { requireAuth, getMemberRole } from "@/lib/api-helpers";
+import type { AssetDocument, ReleaseStatus } from "@/types/asset";
+import { getEffectiveReleaseStatus } from "@/types/asset";
+import { requireAuth, getMemberRole, serializeAsset } from "@/lib/api-helpers";
 import { hasPermission } from "@/lib/rbac";
 import { logAuditEvent } from "@/services/audit-service";
 import { updateAsset } from "@/services/asset-service";
@@ -20,10 +21,10 @@ function isValidObjectId(id: string): boolean {
 }
 
 export async function GET(
-  _request: NextRequest,
+  request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const authResult = await requireAuth();
+  const authResult = await requireAuth(request);
   if (!authResult.ok) return authResult.response;
 
   const { id } = await params;
@@ -47,30 +48,20 @@ export async function GET(
   }
 
   return NextResponse.json({
-    id: asset._id.toHexString(),
-    type: asset.type,
-    teamId: asset.teamId.toHexString(),
-    name: asset.metadata.name,
-    description: asset.metadata.description,
-    author: asset.metadata.author,
-    version: asset.metadata.version,
-    tags: asset.tags,
+    ...serializeAsset(asset),
     content: asset.content,
-    installCount: asset.stats?.installCount ?? 0,
-    viewCount: asset.stats?.viewCount ?? 0,
-    isPublished: asset.isPublished,
     sourceUrl: asset.source?.repoUrl,
     lastScan: asset.lastScan ?? null,
-    createdAt: asset.createdAt.toISOString(),
-    updatedAt: asset.updatedAt.toISOString(),
   });
 }
+
+const MUTABLE_RELEASE_STATUSES: ReleaseStatus[] = ["draft", "archived"];
 
 export async function PATCH(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const authResult = await requireAuth();
+  const authResult = await requireAuth(request);
   if (!authResult.ok) return authResult.response;
 
   const { id } = await params;
@@ -86,7 +77,16 @@ export async function PATCH(
   const db = await getDb();
   const asset = await db.collection<AssetDocument>("assets").findOne(
     { _id: new ObjectId(id) },
-    { projection: { teamId: 1, metadata: 1, content: 1, tags: 1 } }
+    {
+      projection: {
+        teamId: 1,
+        metadata: 1,
+        content: 1,
+        tags: 1,
+        isPublished: 1,
+        releaseStatus: 1,
+      },
+    }
   );
 
   if (!asset) {
@@ -99,13 +99,33 @@ export async function PATCH(
   }
 
   const wantsContentChange = ["name", "description", "version", "tags", "content"].some((field) => field in body);
-  const wantsPublishChange = "isPublished" in body;
+  const wantsPublishChange = "isPublished" in body || "releaseStatus" in body;
+  const requestedReleaseStatus = typeof body.releaseStatus === "string"
+    ? body.releaseStatus as ReleaseStatus
+    : undefined;
+  const currentReleaseStatus = getEffectiveReleaseStatus(asset);
 
   if (wantsContentChange && !hasPermission(role, "skill:update")) {
     return NextResponse.json({ error: "Insufficient permissions" }, { status: 403 });
   }
   if (wantsPublishChange && !hasPermission(role, "skill:publish")) {
     return NextResponse.json({ error: "Insufficient permissions" }, { status: 403 });
+  }
+
+  if (requestedReleaseStatus && !MUTABLE_RELEASE_STATUSES.includes(requestedReleaseStatus)) {
+    return NextResponse.json(
+      { error: "Direct release transitions to pending_review, approved, or published must go through the approvals workflow" },
+      { status: 409 }
+    );
+  }
+  if (body.isPublished === true) {
+    return NextResponse.json(
+      { error: "Direct publish is blocked. Submit an approval request and complete review before publishing." },
+      { status: 409 }
+    );
+  }
+  if (body.isPublished === false && currentReleaseStatus === "published") {
+    body.releaseStatus = "draft";
   }
 
   const updated = await updateAsset(db, new ObjectId(id), {
@@ -117,6 +137,7 @@ export async function PATCH(
       ? (body.tags as unknown[]).filter((tag): tag is string => typeof tag === "string")
       : undefined,
     isPublished: typeof body.isPublished === "boolean" ? body.isPublished : undefined,
+    releaseStatus: requestedReleaseStatus ?? (body.isPublished === false ? "draft" : undefined),
     updatedBy: new ObjectId(authResult.userId),
     changeReason: typeof body.changeReason === "string" ? body.changeReason : undefined,
   });
@@ -125,15 +146,20 @@ export async function PATCH(
     return NextResponse.json({ error: "Asset not found" }, { status: 404 });
   }
 
-  return NextResponse.json({ success: true });
+  const refreshed = await db.collection<AssetDocument>("assets").findOne(
+    { _id: new ObjectId(id) },
+    { projection: { embedding: 0, searchText: 0 } }
+  );
+
+  return NextResponse.json({ success: true, asset: refreshed ? serializeAsset(refreshed) : null });
 }
 
 
 export async function DELETE(
-  _request: NextRequest,
+  request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const authResult = await requireAuth();
+  const authResult = await requireAuth(request);
   if (!authResult.ok) return authResult.response;
 
   const { id } = await params;

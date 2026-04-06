@@ -11,6 +11,7 @@ import type { AssetDocument } from "@/types/asset";
 import { exportAsset } from "@/services/exporters";
 import { getDepartmentTemplate, getDepartmentTemplateSummaries } from "@/services/department-templates";
 import type { DepartmentType } from "@/types/organization";
+import { escapeRegex } from "@/lib/utils";
 
 /**
  * Execute a copilot tool call.
@@ -47,7 +48,7 @@ async function executeSearchAssets(
   if (params.type) filter.type = params.type;
 
   // Text search using searchText field
-  const searchRegex = new RegExp(params.query.split(/\s+/).join("|"), "i");
+  const searchRegex = new RegExp(params.query.split(/\s+/).map(escapeRegex).join("|"), "i");
   filter.searchText = { $regex: searchRegex };
 
   const assets = await db.collection<AssetDocument>("assets")

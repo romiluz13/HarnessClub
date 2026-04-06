@@ -8,7 +8,7 @@ import Link from "next/link";
 const SECTIONS = [
   {
     title: "Getting Started",
-    description: "Set up your first organization, team, and import your agent configs in under 5 minutes.",
+    description: "Connect MongoDB, configure GitHub OAuth, create your first org/team, and import your first agent asset.",
     href: "/docs/getting-started",
     items: [
       "Create an organization",
@@ -89,8 +89,6 @@ const SECTIONS = [
     ],
   },
 ] as const;
-
-type Section = typeof SECTIONS[number];
 
 export default function DocsPage() {
   return (

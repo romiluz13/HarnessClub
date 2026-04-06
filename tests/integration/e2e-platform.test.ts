@@ -5,7 +5,8 @@
  * Each describe block covers one capability domain.
  */
 
-import { describe, it, expect, beforeAll, afterAll, beforeEach } from "vitest";
+import { describe, it, expect, beforeAll, afterAll } from "vitest";
+import { NextRequest } from "next/server";
 import { ObjectId, type Db } from "mongodb";
 import { getTestDb, closeTestDb } from "../helpers/db-setup";
 
@@ -23,6 +24,9 @@ import { createAsset } from "@/services/asset-service";
 import { exportAsset, canExport, getAvailableTargets, EXPORT_TARGETS } from "@/services/exporters";
 import type { GroupMapping } from "@/types/sso";
 import type { ScimUser } from "@/services/scim-service";
+import { GET as getTeamMarketplace } from "@/app/api/marketplace/[teamSlug]/route";
+import { GET as getMarketplaceBrowse } from "@/app/api/marketplace/browse/route";
+import { GET as getInstallManifest } from "@/app/api/assets/[id]/install/route";
 
 let db: Db;
 const MARKER = `e2e-${Date.now()}`;
@@ -434,6 +438,226 @@ describe("E2E-2: Approval Workflow Full Cycle", () => {
   });
 });
 
+// ─── E2E-2.5: Published Distribution Workflow ───────────────
+
+describe("E2E-2.5: Published Distribution Workflow", () => {
+  let publishedSkillId: ObjectId;
+  let publishedSettingsId: ObjectId;
+  let publishedPluginId: ObjectId;
+  let draftSettingsId: ObjectId;
+  let brokenPluginId: ObjectId;
+
+  async function publishAsset(assetId: ObjectId, action: "publish" | "update" = "publish") {
+    const request = await createApprovalRequest(db, {
+      assetId,
+      teamId,
+      requestedBy: userId,
+      action,
+      mode: "single_review",
+    });
+
+    expect(request.success).toBe(true);
+    expect(request.requestId).toBeDefined();
+
+    const decision = await submitDecision(db, request.requestId as ObjectId, {
+      reviewerId,
+      reviewerName: "E2E Reviewer",
+      decision: "approve",
+      comment: `Approve ${action}`,
+      decidedAt: new Date(),
+    });
+
+    expect(decision.success).toBe(true);
+    expect(decision.newStatus).toBe("approved");
+  }
+
+  beforeAll(async () => {
+    await db.collection("teams").updateOne(
+      { _id: teamId },
+      {
+        $set: {
+          settings: {
+            marketplaceEnabled: true,
+            defaultRole: "member",
+            autoPublish: false,
+          },
+        },
+      }
+    );
+
+    const publishedSkill = await createAsset(db, {
+      type: "skill",
+      teamId,
+      metadata: {
+        name: `Distribution Skill ${MARKER}`,
+        description: "Published skill in marketplace workflow",
+        author: "e2e",
+        version: "1.0.0",
+      },
+      content: "# Distribution Skill\n\nPublished for marketplace workflow testing.",
+      tags: ["distribution", MARKER],
+      createdBy: userId,
+    });
+    publishedSkillId = (publishedSkill as { assetId: ObjectId }).assetId;
+
+    const publishedSettings = await createAsset(db, {
+      type: "settings_bundle",
+      teamId,
+      metadata: {
+        name: `Distribution Settings ${MARKER}`,
+        description: "Published settings bundle in marketplace workflow",
+        author: "e2e",
+        version: "1.0.0",
+      },
+      content: JSON.stringify({ theme: "enterprise", strictMode: true }, null, 2),
+      tags: ["distribution", "settings", MARKER],
+      createdBy: userId,
+      settingsConfig: {
+        targetTool: "claude-code",
+        settings: { theme: "enterprise", strictMode: true },
+      },
+    });
+    publishedSettingsId = (publishedSettings as { assetId: ObjectId }).assetId;
+
+    const publishedPlugin = await createAsset(db, {
+      type: "plugin",
+      teamId,
+      metadata: {
+        name: `Distribution Plugin ${MARKER}`,
+        description: "Published plugin bundle for install testing",
+        author: "e2e",
+        version: "1.0.0",
+      },
+      content: JSON.stringify({ name: "distribution-plugin" }, null, 2),
+      tags: ["distribution", "plugin", MARKER],
+      createdBy: userId,
+      pluginConfig: {
+        manifest: { version: "1.0.0" },
+        bundledAssetIds: [publishedSkillId, publishedSettingsId],
+      },
+    });
+    publishedPluginId = (publishedPlugin as { assetId: ObjectId }).assetId;
+
+    const draftSettings = await createAsset(db, {
+      type: "settings_bundle",
+      teamId,
+      metadata: {
+        name: `Draft Settings ${MARKER}`,
+        description: "Draft bundled asset to force install failure",
+        author: "e2e",
+        version: "1.0.0",
+      },
+      content: JSON.stringify({ theme: "draft-only" }, null, 2),
+      tags: ["distribution", "draft", MARKER],
+      createdBy: userId,
+      settingsConfig: {
+        targetTool: "claude-code",
+        settings: { theme: "draft-only" },
+      },
+    });
+    draftSettingsId = (draftSettings as { assetId: ObjectId }).assetId;
+
+    const brokenPlugin = await createAsset(db, {
+      type: "plugin",
+      teamId,
+      metadata: {
+        name: `Broken Distribution Plugin ${MARKER}`,
+        description: "Published plugin with a draft child to ensure failure is loud",
+        author: "e2e",
+        version: "1.0.0",
+      },
+      content: JSON.stringify({ name: "broken-distribution-plugin" }, null, 2),
+      tags: ["distribution", "broken", MARKER],
+      createdBy: userId,
+      pluginConfig: {
+        manifest: { version: "1.0.0" },
+        bundledAssetIds: [publishedSkillId, draftSettingsId],
+      },
+    });
+    brokenPluginId = (brokenPlugin as { assetId: ObjectId }).assetId;
+
+    await publishAsset(publishedSkillId);
+    await publishAsset(publishedSettingsId);
+    await publishAsset(publishedPluginId);
+    await publishAsset(brokenPluginId);
+  });
+
+  it("exposes only distributable assets in the team marketplace endpoint", async () => {
+    const response = await getTeamMarketplace(
+      new NextRequest(`http://localhost/api/marketplace/e2e-team-${MARKER}`),
+      { params: Promise.resolve({ teamSlug: `e2e-team-${MARKER}` }) }
+    );
+
+    expect(response.status).toBe(200);
+    const payload = JSON.parse(await response.text()) as {
+      metadata: { assetCount: number; typeBreakdown: Record<string, number> };
+      plugins: Array<{ name: string; type?: string }>;
+    };
+
+    expect(payload.metadata.assetCount).toBeGreaterThanOrEqual(3);
+    expect(payload.metadata.typeBreakdown.plugin).toBeGreaterThanOrEqual(1);
+    expect(payload.plugins.some((plugin) => plugin.name.includes("distribution-plugin"))).toBe(true);
+    expect(payload.plugins.some((plugin) => plugin.name.includes("draft-settings"))).toBe(false);
+  });
+
+  it("shows published distribution assets in marketplace browse with releaseStatus metadata", async () => {
+    const response = await getMarketplaceBrowse(
+      new NextRequest(`http://localhost/api/marketplace/browse?q=${encodeURIComponent(MARKER)}`)
+    );
+
+    expect(response.status).toBe(200);
+    const payload = await response.json() as {
+      items: Array<{ id: string; name: string; releaseStatus: string }>;
+    };
+
+    const names = payload.items.map((item) => item.name);
+    expect(names).toContain(`Distribution Skill ${MARKER}`);
+    expect(names).toContain(`Distribution Plugin ${MARKER}`);
+    expect(names).not.toContain(`Draft Settings ${MARKER}`);
+    payload.items.forEach((item) => {
+      expect(item.releaseStatus).toBe("published");
+    });
+  });
+
+  it("returns a complete install manifest for a healthy published plugin bundle", async () => {
+    const response = await getInstallManifest(
+      new NextRequest(`http://localhost/api/assets/${publishedPluginId.toHexString()}/install`),
+      { params: Promise.resolve({ id: publishedPluginId.toHexString() }) }
+    );
+
+    expect(response.status).toBe(200);
+    const payload = await response.json() as {
+      assetType: string;
+      files: Array<{ path: string; type: string }>;
+      availableFormats: string[];
+    };
+
+    expect(payload.assetType).toBe("plugin");
+    expect(payload.files.some((file) => file.path === "plugin.json" && file.type === "plugin")).toBe(true);
+    expect(payload.files.some((file) => file.path === "SKILL.md" && file.type === "skill")).toBe(true);
+    expect(payload.files.some((file) => file.path === "settings.json" && file.type === "settings_bundle")).toBe(true);
+    expect(payload.availableFormats).toContain("claude-code");
+  });
+
+  it("fails loudly when a published plugin bundle references a non-distributable child", async () => {
+    const response = await getInstallManifest(
+      new NextRequest(`http://localhost/api/assets/${brokenPluginId.toHexString()}/install`),
+      { params: Promise.resolve({ id: brokenPluginId.toHexString() }) }
+    );
+
+    expect(response.status).toBe(409);
+    const payload = await response.json() as {
+      error: string;
+      blockedBundledAssets: Array<{ id: string; name: string; releaseStatus?: string }>;
+    };
+
+    expect(payload.error).toContain("incomplete");
+    expect(payload.blockedBundledAssets).toHaveLength(1);
+    expect(payload.blockedBundledAssets[0].id).toBe(draftSettingsId.toHexString());
+    expect(payload.blockedBundledAssets[0].releaseStatus).toBe("draft");
+  });
+});
+
 
 // ─── E2E-3: Supply Chain + Trust Score ───────────────────
 
@@ -768,12 +992,11 @@ import { createSearchTool as copilotSearchTool, createScanTool as copilotScanToo
 describe("E2E-7: Copilot Agent Full Loop", () => {
   // Uses real Pi agent with faux LLM — tool calls hit real DB
   let faux: ReturnType<typeof piRegisterFaux>;
-  let copilotAssetId: ObjectId;
 
   beforeAll(async () => {
     faux = piRegisterFaux();
     // Seed a searchable asset
-    const result = await createAsset(db, {
+    await createAsset(db, {
       type: "skill",
       teamId,
       metadata: { name: `Copilot E2E Skill ${MARKER}`, description: "For copilot search", author: "e2e", version: "1.0.0" },
@@ -781,7 +1004,6 @@ describe("E2E-7: Copilot Agent Full Loop", () => {
       tags: ["copilot", "e2e"],
       createdBy: userId,
     });
-    copilotAssetId = (result as { assetId: ObjectId }).assetId;
   });
 
   afterAll(() => {

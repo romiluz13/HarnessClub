@@ -41,7 +41,7 @@ const EMPTY_USAGE: Usage = {
 };
 
 export async function POST(request: NextRequest) {
-  const authResult = await requireAuth();
+  const authResult = await requireAuth(request);
   if (!authResult.ok) return authResult.response;
 
   let body: CopilotChatRequest;

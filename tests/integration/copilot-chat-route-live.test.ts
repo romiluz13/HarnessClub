@@ -3,19 +3,13 @@ import { NextRequest } from "next/server";
 import { ObjectId, type Db } from "mongodb";
 import { closeTestDb, getTestDb } from "../helpers/db-setup";
 import { loadConversation } from "@/services/copilot/memory-service";
-
-const isLiveEnabled = process.env.COPILOT_LIVE_TEST === "1";
-const hasLiveConfig = Boolean(
-  process.env.COPILOT_MODEL
-  && process.env.COPILOT_BASE_URL
-  && process.env.COPILOT_API_KEY
-  && process.env.MONGODB_URI
-);
-const maybeDescribe = isLiveEnabled && hasLiveConfig ? describe : describe.skip;
+import { assertCopilotLiveConfig } from "../helpers/copilot-live-config";
 
 const TEST_TEAM_ID = new ObjectId();
 const TEST_USER_ID = new ObjectId();
 const LIVE_MARKER = `_copilot_route_live_${Date.now()}`;
+
+assertCopilotLiveConfig();
 
 function parseSse(text: string): Array<{ event: string; data: Record<string, unknown> }> {
   return text
@@ -31,11 +25,9 @@ function parseSse(text: string): Array<{ event: string; data: Record<string, unk
     });
 }
 
-let db: Db;
+let db: Db | undefined;
 
 beforeAll(async () => {
-  if (!isLiveEnabled || !hasLiveConfig) return;
-
   db = await getTestDb();
   await db.collection("teams").insertOne({
     _id: TEST_TEAM_ID,
@@ -66,7 +58,7 @@ beforeAll(async () => {
 }, 30_000);
 
 afterAll(async () => {
-  if (!isLiveEnabled || !hasLiveConfig) return;
+  if (!db) return;
 
   await Promise.all([
     db.collection("copilot_conversations").deleteMany({ teamId: TEST_TEAM_ID }),
@@ -76,11 +68,17 @@ afterAll(async () => {
   await closeTestDb();
 });
 
-maybeDescribe("POST /api/copilot/chat — live Grove route", () => {
+describe("POST /api/copilot/chat — live Grove route", () => {
   it("streams real SSE and persists the conversation", async () => {
+    if (!db) {
+      throw new Error("Live test database was not initialized.");
+    }
+
     vi.resetModules();
     vi.doMock("@/lib/api-helpers", () => ({
       requireAuth: async () => ({ ok: true, userId: TEST_USER_ID.toHexString() }),
+      isTeamMember: async (_db: Db, userId: string, lookupTeamId: ObjectId) =>
+        userId === TEST_USER_ID.toHexString() && lookupTeamId.equals(TEST_TEAM_ID),
     }));
     vi.doMock("@/lib/db", () => ({
       getDb: async () => db,

@@ -10,8 +10,14 @@
  */
 
 import { ObjectId, type Db } from "mongodb";
-import type { AssetType, AssetDocument, CreateAssetInput } from "@/types/asset";
-import { buildSearchText, generateFingerprint } from "@/types/asset";
+import type { AssetType, AssetDocument, CreateAssetInput, ReleaseStatus } from "@/types/asset";
+import {
+  buildSearchText,
+  generateFingerprint,
+  getDraftReleaseStatus,
+  getEffectiveReleaseStatus,
+  isPublishedReleaseStatus,
+} from "@/types/asset";
 import { validateAssetInput } from "@/lib/asset-validators";
 import type { ValidationResult } from "@/lib/asset-validators";
 import { embedAsset } from "@/services/embedding-pipeline";
@@ -32,6 +38,43 @@ export interface CreateAssetError {
   success: false;
   error: string;
   validationErrors?: Array<{ field: string; message: string }>;
+}
+
+function normalizeReleaseStatus(
+  requestedStatus?: ReleaseStatus,
+  isPublished?: boolean
+): ReleaseStatus {
+  if (requestedStatus) {
+    return requestedStatus;
+  }
+
+  return isPublished ? "published" : getDraftReleaseStatus();
+}
+
+function shouldResetReleaseStateOnContentChange(
+  current: Pick<AssetDocument, "isPublished"> & Partial<Pick<AssetDocument, "releaseStatus">>
+): boolean {
+  return getEffectiveReleaseStatus(current) !== getDraftReleaseStatus();
+}
+
+function getCurrentReleaseStatus(
+  current: Pick<AssetDocument, "isPublished"> & Partial<Pick<AssetDocument, "releaseStatus">>
+): ReleaseStatus {
+  return getEffectiveReleaseStatus(current);
+}
+
+export function getPublishedDistributionFilter(): {
+  $or: Array<
+    | { releaseStatus: "published"; isPublished: true }
+    | { releaseStatus: { $exists: false }; isPublished: true }
+  >;
+} {
+  return {
+    $or: [
+      { releaseStatus: "published", isPublished: true },
+      { releaseStatus: { $exists: false }, isPublished: true },
+    ],
+  };
 }
 
 /**
@@ -73,6 +116,8 @@ export async function createAsset(
     source: input.source,
     stats: { installCount: 0, viewCount: 0 },
     isPublished: input.isPublished ?? false,
+    releaseStatus: normalizeReleaseStatus(input.releaseStatus, input.isPublished),
+    currentVersionNumber: 0,
     createdBy: input.createdBy,
     createdAt: now,
     updatedAt: now,
@@ -148,22 +193,38 @@ export async function updateAsset(
     content?: string;
     tags?: string[];
     isPublished?: boolean;
+    releaseStatus?: ReleaseStatus;
     updatedBy?: ObjectId;
     changeReason?: string;
   }
 ): Promise<boolean> {
-  // Fetch current doc for searchText rebuild
   const current = await db.collection<AssetDocument>("assets").findOne(
     { _id: assetId },
-    { projection: { teamId: 1, metadata: 1, content: 1, tags: 1 } }
+    {
+      projection: {
+        teamId: 1,
+        metadata: 1,
+        content: 1,
+        tags: 1,
+        isPublished: 1,
+        releaseStatus: 1,
+        currentVersionNumber: 1,
+      },
+    }
   );
   if (!current) return false;
 
-  // If content/metadata changed and updatedBy is provided, create version
-  const hasVersionableChange = updates.content !== undefined || updates.name !== undefined || updates.description !== undefined;
+  const hasVersionableChange =
+    updates.content !== undefined
+    || updates.name !== undefined
+    || updates.description !== undefined
+    || updates.tags !== undefined
+    || updates.version !== undefined;
+
   if (hasVersionableChange && updates.updatedBy) {
     const { createVersion } = await import("./version-service");
-    await createVersion(db, assetId, {
+    const { invalidateApprovalRequestsForAsset } = await import("./approval-service");
+    const version = await createVersion(db, assetId, {
       content: updates.content ?? current.content,
       metadata: {
         name: updates.name ?? current.metadata.name,
@@ -174,13 +235,37 @@ export async function updateAsset(
       updatedBy: updates.updatedBy,
       changeReason: updates.changeReason,
     });
-    // createVersion already updates the asset's content, metadata, tags
-    // so we only need to handle the remaining fields
-    const $setRemaining: Record<string, unknown> = {};
-    if (updates.isPublished !== undefined) $setRemaining.isPublished = updates.isPublished;
-    if (Object.keys($setRemaining).length > 0) {
-      await db.collection("assets").updateOne({ _id: assetId }, { $set: $setRemaining });
+
+    const nextReleaseStatus = shouldResetReleaseStateOnContentChange(current)
+      ? getDraftReleaseStatus()
+      : getCurrentReleaseStatus(current);
+
+    const $setRemaining: Record<string, unknown> = {
+      updatedAt: new Date(),
+      releaseStatus: nextReleaseStatus,
+    };
+
+    if (shouldResetReleaseStateOnContentChange(current)) {
+      $setRemaining.isPublished = false;
+    } else if (updates.isPublished !== undefined) {
+      $setRemaining.isPublished = updates.isPublished;
     }
+
+    if (updates.releaseStatus !== undefined) {
+      $setRemaining.releaseStatus = updates.releaseStatus;
+      $setRemaining.isPublished = isPublishedReleaseStatus(updates.releaseStatus);
+    }
+
+    await db.collection("assets").updateOne({ _id: assetId }, { $set: $setRemaining });
+
+    if (shouldResetReleaseStateOnContentChange(current)) {
+      await invalidateApprovalRequestsForAsset(db, {
+        assetId,
+        teamId: current.teamId,
+        nextVersionNumber: version.versionNumber,
+      });
+    }
+
     return true;
   }
 
@@ -192,26 +277,47 @@ export async function updateAsset(
   if (updates.content !== undefined) $set.content = updates.content;
   if (updates.tags !== undefined) $set.tags = updates.tags.map((t) => t.toLowerCase().trim());
   if (updates.isPublished !== undefined) $set.isPublished = updates.isPublished;
+  if (updates.releaseStatus !== undefined) {
+    $set.releaseStatus = updates.releaseStatus;
+    $set.isPublished = isPublishedReleaseStatus(updates.releaseStatus);
+  }
 
-  // Rebuild searchText if searchable fields changed
-  const hasSearchableChange = updates.name || updates.description || updates.content || updates.tags;
+  const hasSearchableChange = Boolean(
+    updates.name !== undefined
+    || updates.description !== undefined
+    || updates.content !== undefined
+    || updates.tags !== undefined
+  );
+
   if (hasSearchableChange) {
     const newName = updates.name ?? current.metadata.name;
     const newDesc = updates.description ?? current.metadata.description;
     const newContent = updates.content ?? current.content;
     const newTags = updates.tags ?? current.tags;
     $set.searchText = buildSearchText(newName, newDesc, newContent, newTags);
+
+    if (shouldResetReleaseStateOnContentChange(current)) {
+      $set.releaseStatus = getDraftReleaseStatus();
+      $set.isPublished = false;
+      const { invalidateApprovalRequestsForAsset } = await import("./approval-service");
+      await invalidateApprovalRequestsForAsset(db, {
+        assetId,
+        teamId: current.teamId,
+        nextVersionNumber: current.currentVersionNumber,
+      });
+    }
   }
 
   const result = await db.collection("assets").updateOne({ _id: assetId }, { $set });
 
-  // Audit log (fire-and-forget) — only if update matched a document
   if (result.matchedCount > 0 && current.teamId) {
     logAuditEvent(db, {
       actorId: updates.updatedBy ?? assetId,
-      action: updates.isPublished === true ? "asset:publish"
-        : updates.isPublished === false ? "asset:unpublish"
-        : "asset:update",
+      action: updates.isPublished === true || updates.releaseStatus === "published"
+        ? "asset:publish"
+        : updates.isPublished === false
+          ? "asset:unpublish"
+          : "asset:update",
       targetId: assetId,
       teamId: current.teamId as unknown as ObjectId,
       details: { updatedFields: Object.keys(updates).filter((k) => updates[k as keyof typeof updates] !== undefined) },
@@ -257,7 +363,9 @@ export async function listTeamAssets(
 
   const filter: Record<string, unknown> = { teamId };
   if (type) filter.type = type;
-  if (publishedOnly) filter.isPublished = true;
+  if (publishedOnly) {
+    Object.assign(filter, getPublishedDistributionFilter());
+  }
 
   const [assets, total] = await Promise.all([
     db.collection<AssetDocument>("assets")

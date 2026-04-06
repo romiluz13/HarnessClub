@@ -1,11 +1,13 @@
 /**
- * Next.js Proxy — security headers, rate limiting, CORS.
+ * Next.js Proxy — security headers plus best-effort local API throttling.
  *
  * Per api-security-best-practices:
- * - CSP headers on all responses
- * - CORS restricted to allowed origins
- * - Rate limiting via in-memory counter (edge-compatible)
- * - Security headers (X-Frame-Options, X-Content-Type-Options, etc.)
+ * - CSP and baseline security headers on all responses
+ * - Lightweight per-instance throttling for dev/single-instance deployments
+ *
+ * Important: this rate limiter is NOT shared across workers or instances.
+ * For production self-hosting, primary rate limiting should be enforced by an
+ * upstream reverse proxy or a shared store.
  *
  * Per nextjs-app-router-patterns: proxy runs before route handling.
  */
@@ -25,6 +27,7 @@ const RATE_LIMITS = {
 
 /** In-memory rate limit store (per-instance) */
 const rateLimitStore = new Map<string, { count: number; resetAt: number }>();
+const RATE_LIMIT_SCOPE = "local-instance";
 
 function getRateLimit(key: string, limit: number): { allowed: boolean; remaining: number } {
   const now = Date.now();
@@ -50,6 +53,12 @@ function getTier(path: string): keyof typeof RATE_LIMITS {
   return "api";
 }
 
+function addRateLimitHeaders(response: NextResponse, limit: number, remaining: number): void {
+  response.headers.set("X-RateLimit-Limit", String(limit));
+  response.headers.set("X-RateLimit-Remaining", String(remaining));
+  response.headers.set("X-RateLimit-Scope", RATE_LIMIT_SCOPE);
+}
+
 function addSecurityHeaders(response: NextResponse): void {
   response.headers.set("X-Frame-Options", "DENY");
   response.headers.set("X-Content-Type-Options", "nosniff");
@@ -71,7 +80,7 @@ function addSecurityHeaders(response: NextResponse): void {
     "Content-Security-Policy",
     [
       "default-src 'self'",
-      "script-src 'self' 'unsafe-inline' 'unsafe-eval'",
+      "script-src 'self' 'unsafe-inline'",
       "style-src 'self' 'unsafe-inline'",
       "img-src 'self' data: https://avatars.githubusercontent.com",
       "font-src 'self'",
@@ -98,15 +107,13 @@ export function proxy(request: NextRequest) {
         { status: 429 }
       );
       response.headers.set("Retry-After", "60");
-      response.headers.set("X-RateLimit-Limit", String(limit));
-      response.headers.set("X-RateLimit-Remaining", "0");
+      addRateLimitHeaders(response, limit, 0);
       addSecurityHeaders(response);
       return response;
     }
 
     const response = NextResponse.next();
-    response.headers.set("X-RateLimit-Limit", String(limit));
-    response.headers.set("X-RateLimit-Remaining", String(remaining));
+    addRateLimitHeaders(response, limit, remaining);
     addSecurityHeaders(response);
     return response;
   }

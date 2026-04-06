@@ -21,7 +21,7 @@ const VALID_MODES: ApprovalMode[] = ["auto_approve", "single_review", "multi_rev
 const VALID_ACTIONS = ["publish", "update", "cross_dept_share"] as const;
 
 export async function GET(request: NextRequest) {
-  const authResult = await requireAuth();
+  const authResult = await requireAuth(request);
   if (!authResult.ok) return authResult.response;
 
   const db = await getDb();
@@ -91,7 +91,7 @@ export async function GET(request: NextRequest) {
 }
 
 export async function POST(request: NextRequest) {
-  const authResult = await requireAuth();
+  const authResult = await requireAuth(request);
   if (!authResult.ok) return authResult.response;
 
   let body: Record<string, unknown>;
@@ -163,12 +163,21 @@ export async function POST(request: NextRequest) {
     mode: mode as ApprovalMode,
   });
 
-  if (mode === "auto_approve") {
-    return NextResponse.json({ message: "Auto-approved", approved: true }, { status: 200 });
+  if (!result.success) {
+    return NextResponse.json({ error: result.error ?? "Unable to create approval request" }, { status: 400 });
+  }
+
+  if (result.autoApproved) {
+    const autoApprovedReleaseStatus = action === "cross_dept_share" ? "approved" : "published";
+    return NextResponse.json({
+      message: "Auto-approved",
+      approved: true,
+      releaseStatus: autoApprovedReleaseStatus,
+    }, { status: 200 });
   }
 
   return NextResponse.json(
-    { requestId: result.requestId!.toHexString(), message: "Approval request created" },
+    { requestId: result.requestId!.toHexString(), message: "Approval request created", releaseStatus: "pending_review" },
     { status: 201 }
   );
 }

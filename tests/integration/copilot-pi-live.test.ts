@@ -4,22 +4,15 @@ import type { AgentEvent } from "@mariozechner/pi-agent-core";
 import { createCopilotAgent } from "@/services/copilot/pi-agent";
 import type { CopilotContext } from "@/services/copilot/types";
 import { closeTestDb, getTestDb } from "../helpers/db-setup";
-
-const isLiveEnabled = process.env.COPILOT_LIVE_TEST === "1";
-const hasLiveConfig = Boolean(
-  process.env.COPILOT_MODEL
-  && process.env.COPILOT_BASE_URL
-  && process.env.COPILOT_API_KEY
-  && process.env.MONGODB_URI
-);
-
-const maybeDescribe = isLiveEnabled && hasLiveConfig ? describe : describe.skip;
+import { assertCopilotLiveConfig } from "../helpers/copilot-live-config";
 
 const TEST_TEAM_ID = new ObjectId();
 const TEST_USER_ID = new ObjectId();
 const LIVE_MARKER = `_copilot_live_${Date.now()}`;
 const LIVE_DESCRIPTION_PREFIX = "Fixture asset for live Pi + Grove verification";
 const LIVE_DESCRIPTION = `${LIVE_DESCRIPTION_PREFIX} ${LIVE_MARKER}`;
+
+assertCopilotLiveConfig();
 
 const context: CopilotContext = {
   currentPage: "/dashboard/assets",
@@ -28,11 +21,9 @@ const context: CopilotContext = {
   userRole: "admin",
 };
 
-let db: Db;
+let db: Db | undefined;
 
 beforeAll(async () => {
-  if (!isLiveEnabled || !hasLiveConfig) return;
-
   db = await getTestDb();
   await db.collection("assets").insertOne({
     _id: new ObjectId(),
@@ -55,14 +46,18 @@ beforeAll(async () => {
 }, 30_000);
 
 afterAll(async () => {
-  if (!isLiveEnabled || !hasLiveConfig) return;
+  if (!db) return;
 
   await db.collection("assets").deleteMany({ [LIVE_MARKER]: true });
   await closeTestDb();
 });
 
-maybeDescribe("Copilot Pi Agent — Live Grove", () => {
+describe("Copilot Pi Agent — Live Grove", () => {
   it("streams a real response and calls search_assets via the live model", async () => {
+    if (!db) {
+      throw new Error("Live test database was not initialized.");
+    }
+
     const { agent, hasLlm } = createCopilotAgent(db, context);
     expect(hasLlm).toBe(true);
 

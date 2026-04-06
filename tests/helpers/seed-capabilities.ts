@@ -151,6 +151,51 @@ export function buildActivity() {
   return events;
 }
 
+async function fetchEmbeddingsWithRetry(
+  apiKey: string,
+  texts: string[]
+): Promise<Array<{ embedding: number[] }>> {
+  let lastError: unknown;
+
+  for (let attempt = 1; attempt <= 3; attempt++) {
+    try {
+      const response = await fetch("https://api.voyageai.com/v1/embeddings", {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${apiKey}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          model: "voyage-3-lite",
+          input: texts,
+          input_type: "document",
+        }),
+        signal: AbortSignal.timeout(15_000),
+      });
+
+      if (!response.ok) {
+        throw new Error(`Voyage API error: ${response.status} ${await response.text()}`);
+      }
+
+      const data = (await response.json()) as {
+        data: Array<{ embedding: number[] }>;
+      };
+
+      return data.data;
+    } catch (error) {
+      lastError = error;
+
+      if (attempt < 3) {
+        await new Promise((resolve) => setTimeout(resolve, attempt * 1_000));
+      }
+    }
+  }
+
+  throw lastError instanceof Error
+    ? lastError
+    : new Error("Voyage embeddings request failed after retries");
+}
+
 /**
  * Generate REAL embeddings via Voyage AI and seed everything into the DB.
  * This is idempotent — skips if marker docs already exist.
@@ -170,33 +215,13 @@ export async function seedCapabilitiesData(db: Db): Promise<void> {
     (s) => `${s.metadata.name} ${s.metadata.description} ${s.content}`
   );
 
-  // Voyage AI allows up to 128 inputs per call
-  const response = await fetch("https://api.voyageai.com/v1/embeddings", {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${apiKey}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({
-      model: "voyage-3-lite",
-      input: texts,
-      input_type: "document",
-    }),
-  });
-
-  if (!response.ok) {
-    throw new Error(`Voyage API error: ${response.status} ${await response.text()}`);
-  }
-
-  const data = (await response.json()) as {
-    data: Array<{ embedding: number[] }>;
-  };
+  const embeddings = await fetchEmbeddingsWithRetry(apiKey, texts);
 
   // Build asset documents with real embeddings + searchText
   const skillDocs = SKILLS_DATA.map((s, i) => ({
     ...s,
     searchText: mkSearchText(s.metadata.name, s.metadata.description, s.content, s.tags),
-    embedding: data.data[i].embedding,
+    embedding: embeddings[i].embedding,
     [CAP_TEST_MARKER]: true,
   }));
 

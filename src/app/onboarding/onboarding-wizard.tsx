@@ -12,7 +12,7 @@
 
 import { useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
-import { Building2, Users, Briefcase, Wrench, Settings, CheckCircle2, ChevronRight, ChevronLeft, Loader2 } from "lucide-react";
+import { Building2, Users, Briefcase, Settings, CheckCircle2, ChevronRight, ChevronLeft, Loader2 } from "lucide-react";
 import type { AgentTooling, TeamScale, WorkflowPreference } from "@/services/onboarding-service";
 
 const DEPT_OPTIONS = [
@@ -104,8 +104,6 @@ export function OnboardingWizard() {
       setSubmitting(false);
     }
   }, [orgName, deptType, teamName, tooling, scale, workflow, router]);
-
-  const stepIcons = [Building2, Briefcase, Users, Settings, CheckCircle2];
 
   return (
     <div className="rounded-xl border border-gray-200 bg-white p-8 shadow-sm dark:border-gray-800 dark:bg-gray-900">

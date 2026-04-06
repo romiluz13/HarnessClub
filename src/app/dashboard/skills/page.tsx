@@ -1,16 +1,10 @@
 /**
- * Skills listing page with import capability.
- * Server component wrapper; client components handle data fetching.
+ * Legacy skills listing route.
+ * Redirects to the canonical assets registry page.
  */
 
-import { SkillsList } from "@/components/skills-list";
-import { SkillsPageHeader } from "@/components/skills-page-header";
+import { redirect } from "next/navigation";
 
 export default function SkillsPage() {
-  return (
-    <div className="space-y-6">
-      <SkillsPageHeader />
-      <SkillsList />
-    </div>
-  );
+  redirect("/dashboard/assets");
 }

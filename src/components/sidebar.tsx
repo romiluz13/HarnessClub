@@ -6,7 +6,7 @@
  * Per AGENTS.md: SVG icons only (Lucide), 44px touch targets, cursor-pointer on clickables.
  */
 
-import { useState, useEffect, useCallback } from "react";
+import { useCallback, useEffect, useSyncExternalStore } from "react";
 import { usePathname } from "next/navigation";
 import Link from "next/link";
 import {
@@ -21,6 +21,7 @@ import {
 } from "lucide-react";
 
 const SIDEBAR_COLLAPSED_KEY = "skillshub-sidebar-collapsed";
+const SIDEBAR_COLLAPSE_EVENT = "skillshub-sidebar-collapsed-change";
 
 interface NavItemConfig {
   href: string;
@@ -44,17 +45,16 @@ interface SidebarProps {
 
 export function Sidebar({ className = "" }: SidebarProps) {
   const pathname = usePathname();
-  const [collapsed, setCollapsed] = useState(() => {
-    if (typeof window === "undefined") return false;
-    return window.localStorage.getItem(SIDEBAR_COLLAPSED_KEY) === "true";
-  });
+  const collapsed = useSyncExternalStore(
+    subscribeToSidebarPreference,
+    getSidebarCollapsedSnapshot,
+    () => false
+  );
 
   const toggleCollapse = useCallback(() => {
-    setCollapsed((prev) => {
-      const next = !prev;
-      localStorage.setItem(SIDEBAR_COLLAPSED_KEY, String(next));
-      return next;
-    });
+    const next = !getSidebarCollapsedSnapshot();
+    window.localStorage.setItem(SIDEBAR_COLLAPSED_KEY, String(next));
+    window.dispatchEvent(new Event(SIDEBAR_COLLAPSE_EVENT));
   }, []);
 
   const handleKeyDown = useCallback((e: KeyboardEvent) => {
@@ -142,4 +142,27 @@ export function Sidebar({ className = "" }: SidebarProps) {
       </nav>
     </aside>
   );
+}
+
+function getSidebarCollapsedSnapshot(): boolean {
+  if (typeof window === "undefined") {
+    return false;
+  }
+
+  return window.localStorage.getItem(SIDEBAR_COLLAPSED_KEY) === "true";
+}
+
+function subscribeToSidebarPreference(callback: () => void): () => void {
+  if (typeof window === "undefined") {
+    return () => undefined;
+  }
+
+  const handleChange = () => callback();
+  window.addEventListener("storage", handleChange);
+  window.addEventListener(SIDEBAR_COLLAPSE_EVENT, handleChange);
+
+  return () => {
+    window.removeEventListener("storage", handleChange);
+    window.removeEventListener(SIDEBAR_COLLAPSE_EVENT, handleChange);
+  };
 }

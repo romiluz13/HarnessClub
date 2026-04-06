@@ -10,6 +10,12 @@ import { useState } from "react";
 import { signIn } from "next-auth/react";
 import { Loader2 } from "lucide-react";
 
+interface SignInFormProps {
+  providerId: string;
+  providerLabel: string;
+  callbackUrl?: string;
+}
+
 function GitHubIcon({ className }: { className?: string }) {
   return (
     <svg className={className} viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
@@ -18,13 +24,31 @@ function GitHubIcon({ className }: { className?: string }) {
   );
 }
 
-export function SignInForm() {
+function ProviderIcon({
+  providerId,
+  className,
+}: {
+  providerId: string;
+  className?: string;
+}) {
+  if (providerId === "github") {
+    return <GitHubIcon className={className} />;
+  }
+
+  return null;
+}
+
+export function SignInForm({
+  providerId,
+  providerLabel,
+  callbackUrl = "/dashboard",
+}: SignInFormProps) {
   const [loading, setLoading] = useState(false);
 
   const handleSignIn = async () => {
     setLoading(true);
     try {
-      await signIn("github", { callbackUrl: "/dashboard" });
+      await signIn(providerId, { callbackUrl });
     } catch {
       setLoading(false);
     }
@@ -39,9 +63,9 @@ export function SignInForm() {
       {loading ? (
         <Loader2 className="h-5 w-5 animate-spin" />
       ) : (
-        <GitHubIcon className="h-5 w-5" />
+        <ProviderIcon providerId={providerId} className="h-5 w-5" />
       )}
-      {loading ? "Signing in..." : "Continue with GitHub"}
+      {loading ? `Signing in with ${providerLabel}...` : `Continue with ${providerLabel}`}
     </button>
   );
 }

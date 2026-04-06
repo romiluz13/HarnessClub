@@ -17,6 +17,9 @@ export async function GET() {
         "POST /api/auth/signin": "OAuth sign-in (GitHub)",
         "POST /api/v1/tokens": "Create API token (requires auth)",
       },
+      system: {
+        "GET /api/health": "Health and database readiness check",
+      },
       organizations: {
         "GET /api/orgs": "List your organizations",
         "POST /api/orgs": "Create organization",
@@ -24,11 +27,12 @@ export async function GET() {
         "POST /api/orgs/{orgId}/departments": "Create department",
       },
       assets: {
+        "GET /api/assets": "List assets for your accessible teams",
         "GET /api/assets/{id}": "Get asset by ID",
+        "GET /api/search?q=": "Search assets across your accessible teams",
         "POST /api/assets/import": "Import asset from URL/GitHub",
         "GET /api/assets/{id}/export?format=": "Export asset (cursor, copilot, windsurf, codex, claude-code)",
         "GET /api/assets/{id}/install": "Install plugin (file tree)",
-        "POST /api/assets/search": "Search assets",
       },
       marketplace: {
         "GET /api/marketplace/{teamSlug}": "Team marketplace.json",

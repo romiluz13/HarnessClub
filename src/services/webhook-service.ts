@@ -127,7 +127,8 @@ export async function dispatchWebhook(
           { $inc: { "stats.totalDeliveries": 1, "stats.successfulDeliveries": 1 }, $set: { "stats.lastDeliveryAt": new Date() } }
         );
       })
-      .catch(() => {
+      .catch((err: Error) => {
+        console.warn("Webhook delivery failed:", wh.url, err.message);
         db.collection("webhooks").updateOne(
           { _id: wh._id },
           { $inc: { "stats.totalDeliveries": 1, "stats.failedDeliveries": 1 } }

@@ -13,6 +13,7 @@ import { createHash } from "crypto";
 import { getDb } from "@/lib/db";
 import type { OrganizationDocument } from "@/types/organization";
 import type { AssetDocument } from "@/types/asset";
+import { getPublishedDistributionFilter } from "@/services/asset-service";
 
 export async function GET(
   request: NextRequest,
@@ -58,7 +59,7 @@ export async function GET(
   // Get published assets
   const assetQuery: Record<string, unknown> = {
     teamId: { $in: teamIds },
-    isPublished: true,
+    ...getPublishedDistributionFilter(),
   };
   const typeFilter = request.nextUrl.searchParams.get("type");
   if (typeFilter) assetQuery.type = typeFilter;

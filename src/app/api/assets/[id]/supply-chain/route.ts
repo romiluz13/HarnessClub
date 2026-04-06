@@ -15,10 +15,10 @@ import { scanAsset } from "@/services/type-scanner";
 import { computeTrustScore } from "@/services/trust-score";
 
 export async function GET(
-  _request: NextRequest,
+  request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const authResult = await requireAuth();
+  const authResult = await requireAuth(request);
   if (!authResult.ok) return authResult.response;
 
   const { id } = await params;

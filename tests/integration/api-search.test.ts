@@ -12,8 +12,6 @@ import {
   seedCapabilitiesData,
   cleanCapabilitiesData,
   TEAM_A_ID,
-  TEAM_B_ID,
-  CAP_TEST_MARKER,
 } from "../helpers/seed-capabilities";
 
 let db: Db;

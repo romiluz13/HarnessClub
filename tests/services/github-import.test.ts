@@ -4,7 +4,6 @@
  */
 
 import { describe, it, expect, beforeAll, afterAll, beforeEach } from "vitest";
-import { ObjectId } from "mongodb";
 import type { Db } from "mongodb";
 import {
   getTestDb,

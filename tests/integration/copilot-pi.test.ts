@@ -14,7 +14,6 @@ import { getTestDb, closeTestDb } from "../helpers/db-setup";
 import {
   registerFauxProvider,
   fauxAssistantMessage,
-  fauxText,
   fauxToolCall,
   streamSimple,
 } from "@mariozechner/pi-ai";
@@ -23,7 +22,6 @@ import { buildSystemPrompt } from "@/services/copilot/context-builder";
 import {
   createSearchTool,
   createExplainTool,
-  createScanTool,
 } from "@/services/copilot/pi-tools";
 import type { CopilotContext } from "@/services/copilot/types";
 
