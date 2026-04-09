@@ -6,7 +6,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { ObjectId } from "mongodb";
 import { getDb } from "@/lib/db";
-import { requireAuth } from "@/lib/api-helpers";
+import { requireAuth, requireOrgPermission } from "@/lib/api-helpers";
 import { getMetricsReport } from "@/services/metrics-service";
 
 export async function GET(
@@ -23,10 +23,16 @@ export async function GET(
 
   const db = await getDb();
   const orgId = new ObjectId(orgIdStr);
+  const userId = new ObjectId(authResult.userId);
 
   const org = await db.collection("organizations").findOne({ _id: orgId });
   if (!org) {
     return NextResponse.json({ error: "Organization not found" }, { status: 404 });
+  }
+
+  const orgRole = await requireOrgPermission(db, userId, orgId, "analytics:read");
+  if (!orgRole) {
+    return NextResponse.json({ error: "Insufficient permissions" }, { status: 403 });
   }
 
   // Gather all teams under this org

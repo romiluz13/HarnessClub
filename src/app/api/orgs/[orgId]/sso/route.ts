@@ -14,6 +14,7 @@ import { hasOrgPermission } from "@/lib/rbac";
 import { getOrgById } from "@/services/org-service";
 import {
   getSsoConfig,
+  migrateOidcSecretIfNeeded,
   upsertSsoConfig,
   disableSso,
   isSsoEnforced,
@@ -80,35 +81,36 @@ export async function GET(
   if (!config) {
     return NextResponse.json({ sso: null, enforced: false });
   }
+  const hydratedConfig = await migrateOidcSecretIfNeeded(db, config);
 
   return NextResponse.json({
     sso: {
-      id: config._id.toHexString(),
-      providerType: config.providerType,
-      providerPreset: config.providerPreset,
-      enabled: config.enabled,
-      jitProvisioning: config.jitProvisioning,
-      enforceSSO: config.enforceSSO,
-      autoDeactivate: config.autoDeactivate,
-      groupMappings: serializeGroupMappings(config.groupMappings),
-      saml: config.saml ? {
-        entityId: config.saml.entityId,
-        ssoUrl: config.saml.ssoUrl,
-        sloUrl: config.saml.sloUrl,
-        certificate: config.saml.certificate,
-        spEntityId: config.saml.spEntityId,
-        nameIdFormat: config.saml.nameIdFormat,
-        attributeMapping: config.saml.attributeMapping,
+      id: hydratedConfig._id.toHexString(),
+      providerType: hydratedConfig.providerType,
+      providerPreset: hydratedConfig.providerPreset,
+      enabled: hydratedConfig.enabled,
+      jitProvisioning: hydratedConfig.jitProvisioning,
+      enforceSSO: hydratedConfig.enforceSSO,
+      autoDeactivate: hydratedConfig.autoDeactivate,
+      groupMappings: serializeGroupMappings(hydratedConfig.groupMappings),
+      saml: hydratedConfig.saml ? {
+        entityId: hydratedConfig.saml.entityId,
+        ssoUrl: hydratedConfig.saml.ssoUrl,
+        sloUrl: hydratedConfig.saml.sloUrl,
+        certificate: hydratedConfig.saml.certificate,
+        spEntityId: hydratedConfig.saml.spEntityId,
+        nameIdFormat: hydratedConfig.saml.nameIdFormat,
+        attributeMapping: hydratedConfig.saml.attributeMapping,
       } : null,
-      oidc: config.oidc ? {
-        issuer: config.oidc.issuer,
-        clientId: config.oidc.clientId,
-        scopes: config.oidc.scopes,
-        claimMapping: config.oidc.claimMapping,
-        hasClientSecret: !!config.oidc.clientSecretEncrypted,
+      oidc: hydratedConfig.oidc ? {
+        issuer: hydratedConfig.oidc.issuer,
+        clientId: hydratedConfig.oidc.clientId,
+        scopes: hydratedConfig.oidc.scopes,
+        claimMapping: hydratedConfig.oidc.claimMapping,
+        hasClientSecret: !!hydratedConfig.oidc.clientSecretEncrypted,
       } : null,
-      createdAt: config.createdAt.toISOString(),
-      updatedAt: config.updatedAt.toISOString(),
+      createdAt: hydratedConfig.createdAt.toISOString(),
+      updatedAt: hydratedConfig.updatedAt.toISOString(),
     },
     enforced: await isSsoEnforced(db, orgOid),
   });

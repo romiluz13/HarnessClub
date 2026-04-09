@@ -10,7 +10,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { ObjectId } from "mongodb";
 import { getDb } from "@/lib/db";
-import { requireAuth } from "@/lib/api-helpers";
+import { requireAuth, requireOrgPermission } from "@/lib/api-helpers";
 import { getOrgById, listDepartments } from "@/services/org-service";
 import { generateComplianceReport } from "@/services/compliance-service";
 
@@ -30,10 +30,16 @@ export async function GET(
   }
 
   const db = await getDb();
+  const userId = new ObjectId(authResult.userId);
 
   const org = await getOrgById(db, orgOid);
   if (!org) {
     return NextResponse.json({ error: "Organization not found" }, { status: 404 });
+  }
+
+  const orgRole = await requireOrgPermission(db, userId, orgOid, "analytics:read");
+  if (!orgRole) {
+    return NextResponse.json({ error: "Insufficient permissions" }, { status: 403 });
   }
 
   // Optional department filter

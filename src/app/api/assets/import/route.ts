@@ -23,6 +23,7 @@ import { createAsset } from "@/services/asset-service";
 import { computeTrustScore } from "@/services/trust-score";
 import type { CreateAssetInput, AssetDocument } from "@/types/asset";
 import type { AssetType } from "@/types/asset";
+import { assertSafeOutboundUrl } from "@/lib/network-safety";
 
 export async function POST(request: NextRequest) {
   const authResult = await requireAuth(request);
@@ -67,15 +68,17 @@ export async function POST(request: NextRequest) {
   } else if (typeof url === "string" && (url as string).startsWith("http")) {
     // Mode 2: Fetch from URL
     try {
-      const response = await fetch(url as string, {
-        headers: { "User-Agent": "AgentConfig/2.0" },
+      const safeUrl = await assertSafeOutboundUrl(url as string);
+      const response = await fetch(safeUrl, {
+        headers: { "User-Agent": "HarnessLab/2.0" },
+        signal: AbortSignal.timeout(10_000),
       });
       if (!response.ok) {
         return NextResponse.json({ error: `Failed to fetch URL: ${response.status}` }, { status: 422 });
       }
       rawContent = await response.text();
       // Extract filename from URL path
-      const urlPath = new URL(url as string).pathname;
+      const urlPath = safeUrl.pathname;
       rawFilename = urlPath.split("/").filter(Boolean).pop() || "imported-url.md";
     } catch (err) {
       return NextResponse.json({ error: `Failed to fetch URL: ${(err as Error).message}` }, { status: 422 });

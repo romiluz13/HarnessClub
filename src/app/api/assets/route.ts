@@ -7,7 +7,7 @@
  */
 
 import { NextRequest, NextResponse } from "next/server";
-import { ObjectId } from "mongodb";
+import { ObjectId, type Document } from "mongodb";
 import { getDb } from "@/lib/db";
 import { ASSET_TYPES } from "@/types/asset";
 import type { AssetType, CreateAssetInput } from "@/types/asset";
@@ -15,7 +15,60 @@ import { requireAuth, getUserTeamIds, serializeAsset, getMemberRole } from "@/li
 import type { AssetDocument } from "@/types/asset";
 import { hasPermission } from "@/lib/rbac";
 import { createAsset } from "@/services/asset-service";
-import { escapeRegex } from "@/lib/utils";
+
+async function searchAssetsPage(
+  db: Awaited<ReturnType<typeof getDb>>,
+  options: {
+    teamIds: ObjectId[];
+    query: string;
+    type?: AssetType;
+    skip: number;
+    limit: number;
+  }
+) {
+  const filter: Document[] = [
+    { in: { path: "teamId", value: options.teamIds } },
+  ];
+  if (options.type) {
+    filter.push({ equals: { path: "type", value: options.type } });
+  }
+
+  const searchStage = {
+    index: "assets_search",
+    compound: {
+      must: [
+        {
+          text: {
+            query: options.query,
+            path: ["metadata.name", "metadata.description", "content", "searchText"],
+            fuzzy: { maxEdits: 1 },
+          },
+        },
+      ],
+      filter,
+    },
+    count: { type: "total" as const },
+  };
+
+  const [assets, totalResult] = await Promise.all([
+    db.collection<AssetDocument>("assets").aggregate<AssetDocument>([
+      { $search: searchStage },
+      { $addFields: { _searchScore: { $meta: "searchScore" } } },
+      { $sort: { _searchScore: -1, updatedAt: -1 } },
+      { $skip: options.skip },
+      { $limit: options.limit },
+      { $project: { content: 0, embedding: 0, searchText: 0, _searchScore: 0 } },
+    ]).toArray(),
+    db.collection("assets").aggregate([
+      { $searchMeta: searchStage },
+    ]).toArray(),
+  ]);
+
+  return {
+    assets,
+    total: totalResult[0]?.count?.total ?? 0,
+  };
+}
 
 export async function GET(request: NextRequest) {
   const authResult = await requireAuth(request);
@@ -39,23 +92,36 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ assets: [], total: 0, page, limit });
   }
 
-  const filter: Record<string, unknown> = { teamId: { $in: teamIds } };
-  if (typeParam && ASSET_TYPES.includes(typeParam as AssetType)) {
-    filter.type = typeParam;
-  }
-  if (queryParam) {
-    filter.searchText = { $regex: escapeRegex(queryParam), $options: "i" };
-  }
+  const typeFilter = typeParam && ASSET_TYPES.includes(typeParam as AssetType)
+    ? typeParam as AssetType
+    : undefined;
 
-  const [assets, total] = await Promise.all([
-    db.collection<AssetDocument>("assets")
-      .find(filter, { projection: { content: 0, embedding: 0, searchText: 0 } })
-      .sort({ updatedAt: -1 })
-      .skip(skip)
-      .limit(limit)
-      .toArray(),
-    db.collection<AssetDocument>("assets").countDocuments(filter),
-  ]);
+  const { assets, total } = queryParam
+    ? await searchAssetsPage(db, {
+        teamIds,
+        query: queryParam,
+        type: typeFilter,
+        skip,
+        limit,
+      })
+    : await (async () => {
+        const filter: Record<string, unknown> = { teamId: { $in: teamIds } };
+        if (typeFilter) {
+          filter.type = typeFilter;
+        }
+
+        const [listedAssets, listedTotal] = await Promise.all([
+          db.collection<AssetDocument>("assets")
+            .find(filter, { projection: { content: 0, embedding: 0, searchText: 0 } })
+            .sort({ updatedAt: -1 })
+            .skip(skip)
+            .limit(limit)
+            .toArray(),
+          db.collection<AssetDocument>("assets").countDocuments(filter),
+        ]);
+
+        return { assets: listedAssets, total: listedTotal };
+      })();
 
   return NextResponse.json({ assets: assets.map(serializeAsset), total, page, limit });
 }

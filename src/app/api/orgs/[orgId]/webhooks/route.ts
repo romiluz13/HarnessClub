@@ -82,6 +82,9 @@ export async function POST(
 
   // Handle deactivation via POST action
   if (body.action === "deactivate" && typeof body.webhookId === "string") {
+    if (!ObjectId.isValid(body.webhookId)) {
+      return NextResponse.json({ error: "Invalid webhookId" }, { status: 400 });
+    }
     const db = await getDb();
     await db.collection("webhooks").updateOne(
       { _id: new ObjectId(body.webhookId as string), orgId: orgOid },
@@ -117,12 +120,17 @@ export async function POST(
     return NextResponse.json({ error: "Only organization owner can create webhooks" }, { status: 403 });
   }
 
-  const result = await createWebhook(db, {
-    orgId: orgOid,
-    teamId: teamId ? new ObjectId(teamId as string) : undefined,
-    url: url as string,
-    events: events as WebhookEvent[],
-  });
+  let result;
+  try {
+    result = await createWebhook(db, {
+      orgId: orgOid,
+      teamId: teamId ? new ObjectId(teamId as string) : undefined,
+      url: url as string,
+      events: events as WebhookEvent[],
+    });
+  } catch (error) {
+    return NextResponse.json({ error: (error as Error).message }, { status: 422 });
+  }
 
   return NextResponse.json(
     {

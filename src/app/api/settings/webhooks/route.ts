@@ -60,11 +60,16 @@ export async function POST(request: NextRequest) {
 
   if (!orgId) return NextResponse.json({ error: "No org found" }, { status: 400 });
 
-  const result = await createWebhook(db, {
-    orgId,
-    url: body.url,
-    events: body.events as import("@/services/webhook-service").WebhookEvent[],
-  });
+  let result;
+  try {
+    result = await createWebhook(db, {
+      orgId,
+      url: body.url,
+      events: body.events as import("@/services/webhook-service").WebhookEvent[],
+    });
+  } catch (error) {
+    return NextResponse.json({ error: (error as Error).message }, { status: 422 });
+  }
 
   return NextResponse.json({
     webhookId: result.webhookId.toHexString(),
@@ -86,9 +91,24 @@ export async function PATCH(request: NextRequest) {
   if (body.action !== "delete" || !body.webhookId) {
     return NextResponse.json({ error: "webhookId and action=delete required" }, { status: 400 });
   }
+  if (!ObjectId.isValid(body.webhookId)) {
+    return NextResponse.json({ error: "Invalid webhookId" }, { status: 400 });
+  }
 
   const db = await getDb();
-  await db.collection("webhooks").deleteOne({ _id: new ObjectId(body.webhookId) });
+  const userId = new ObjectId(authResult.userId);
+  const user = await db.collection<UserDocument>("users").findOne({ _id: userId });
+  const orgId = user?.orgMemberships?.[0]?.orgId;
+
+  if (!orgId) return NextResponse.json({ error: "No org found" }, { status: 400 });
+
+  const result = await db.collection("webhooks").deleteOne({
+    _id: new ObjectId(body.webhookId),
+    orgId,
+  });
+  if (result.deletedCount === 0) {
+    return NextResponse.json({ error: "Webhook not found" }, { status: 404 });
+  }
 
   return NextResponse.json({ success: true });
 }

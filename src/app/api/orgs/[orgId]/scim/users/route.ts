@@ -12,7 +12,7 @@ import { getDb } from "@/lib/db";
 import { getOrgById } from "@/services/org-service";
 import { processScimUser, getScimSyncStatus, updateSyncStatus } from "@/services/scim-service";
 import type { ScimUser } from "@/services/scim-service";
-import { validateApiToken } from "@/services/api-token-service";
+import { hasTokenScope, validateApiToken } from "@/services/api-token-service";
 
 export async function GET(
   request: NextRequest,
@@ -34,7 +34,11 @@ export async function GET(
   const db = await getDb();
   const token = authHeader.slice(7);
   const tokenDoc = await validateApiToken(db, token);
-  if (!tokenDoc || tokenDoc.orgId.toHexString() !== orgOid.toHexString()) {
+  if (
+    !tokenDoc
+    || tokenDoc.orgId.toHexString() !== orgOid.toHexString()
+    || !hasTokenScope(tokenDoc, "write")
+  ) {
     return NextResponse.json({ error: "Invalid or unauthorized token" }, { status: 403 });
   }
 
@@ -86,7 +90,11 @@ export async function POST(
   const db = await getDb();
   const token = authHeader.slice(7);
   const tokenDoc = await validateApiToken(db, token);
-  if (!tokenDoc || tokenDoc.orgId.toHexString() !== orgOid.toHexString()) {
+  if (
+    !tokenDoc
+    || tokenDoc.orgId.toHexString() !== orgOid.toHexString()
+    || !hasTokenScope(tokenDoc, "write")
+  ) {
     return NextResponse.json({ error: "Invalid or unauthorized token" }, { status: 403 });
   }
 

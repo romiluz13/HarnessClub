@@ -12,6 +12,7 @@ import { resolveGroupMappings, upsertSsoConfig, getSsoConfig, disableSso } from 
 import { createApiToken, validateApiToken, revokeApiToken } from "@/services/api-token-service";
 import { logAuditEvent, getAuditLogs, exportToSiem } from "@/services/audit-service";
 import type { GroupMapping } from "@/types/sso";
+import { decryptSecret, isEncryptedSecret } from "@/lib/secret-crypto";
 
 let db: Db;
 const orgId = new ObjectId();
@@ -43,7 +44,7 @@ describe("SSO Config — DB round-trip", () => {
         entityId: "https://sso.okta.com/app/xyz",
         ssoUrl: "https://sso.okta.com/app/xyz/sso/saml",
         certificate: "-----BEGIN CERTIFICATE-----\nMIIC...\n-----END CERTIFICATE-----",
-        spEntityId: "https://agentconfig.dev/api/auth/saml",
+        spEntityId: "https://harnesslab.dev/api/auth/saml",
         nameIdFormat: "email",
         attributeMapping: { email: "email" },
       },
@@ -65,6 +66,29 @@ describe("SSO Config — DB round-trip", () => {
     await disableSso(db, orgId);
     const config = await getSsoConfig(db, orgId);
     expect(config!.enabled).toBe(false);
+  });
+
+  it("stores OIDC client secret encrypted at rest", async () => {
+    const rawSecret = "super-secret-value";
+    await upsertSsoConfig(db, orgId, {
+      providerType: "oidc",
+      providerPreset: "google",
+      oidc: {
+        issuer: "https://accounts.google.com",
+        clientId: "client-id",
+        clientSecretEncrypted: rawSecret,
+        scopes: ["openid", "email", "profile"],
+        claimMapping: { email: "email", name: "name", groups: "groups" },
+      },
+      jitProvisioning: true,
+      enforceSSO: true,
+    });
+
+    const config = await getSsoConfig(db, orgId);
+    expect(config?.oidc?.clientSecretEncrypted).toBeDefined();
+    expect(config?.oidc?.clientSecretEncrypted).not.toBe(rawSecret);
+    expect(isEncryptedSecret(config?.oidc?.clientSecretEncrypted)).toBe(true);
+    expect(decryptSecret(config!.oidc!.clientSecretEncrypted)).toBe(rawSecret);
   });
 });
 
@@ -185,7 +209,7 @@ describe("Audit Logging — DB round-trip", () => {
     expect(events.length).toBeGreaterThanOrEqual(1);
     const found = events.find((e) => e.target === targetId.toHexString());
     expect(found).toBeDefined();
-    expect(found!.source).toBe("agentconfig");
+    expect(found!.source).toBe("harnesslab");
     expect(found!.severity).toBe("info");
     expect(found!.action).toBe("asset:create");
   });

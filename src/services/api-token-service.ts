@@ -49,6 +49,12 @@ export interface ApiTokenDocument {
   createdAt: Date;
 }
 
+const TOKEN_SCOPE_ORDER: Record<TokenScope, number> = {
+  read: 1,
+  write: 2,
+  admin: 3,
+};
+
 /** Result of creating a token — includes raw token (shown only once) */
 export interface TokenCreateResult {
   tokenId: ObjectId;
@@ -135,6 +141,13 @@ export async function validateApiToken(
   }
 
   return token;
+}
+
+export function hasTokenScope(
+  token: Pick<ApiTokenDocument, "scope">,
+  requiredScope: TokenScope
+): boolean {
+  return TOKEN_SCOPE_ORDER[token.scope] >= TOKEN_SCOPE_ORDER[requiredScope];
 }
 
 /**

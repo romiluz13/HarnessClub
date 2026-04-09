@@ -129,6 +129,7 @@ export function SearchBar() {
             aria-label="Search assets"
             aria-expanded={open && suggestions.length > 0}
             aria-controls="search-suggestions"
+            aria-activedescendant={selectedIndex >= 0 ? `search-suggestion-${suggestions[selectedIndex]?.skillId}` : undefined}
             role="combobox"
             aria-autocomplete="list"
             autoComplete="off"
@@ -152,6 +153,7 @@ export function SearchBar() {
         <ul id="search-suggestions" className="absolute left-0 right-0 top-11 z-50 rounded-lg border border-gray-200 bg-white py-1 shadow-lg" role="listbox">
           {suggestions.map((s, i) => (
             <li
+              id={`search-suggestion-${s.skillId}`}
               key={s.skillId}
               role="option"
               aria-selected={i === selectedIndex}

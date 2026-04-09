@@ -236,7 +236,7 @@ function SsoForm({ orgId, initialSso }: { orgId: string; initialSso: EditableSso
         </div>
 
         {error ? (
-          <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700 dark:border-red-900/40 dark:bg-red-950/40 dark:text-red-200">
+          <div role="alert" className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700 dark:border-red-900/40 dark:bg-red-950/40 dark:text-red-200">
             {error}
           </div>
         ) : null}
@@ -247,7 +247,7 @@ function SsoForm({ orgId, initialSso }: { orgId: string; initialSso: EditableSso
           className="flex cursor-pointer items-center gap-1.5 rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50">
           {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />} Save Configuration
         </button>
-        {saved && <span className="text-sm text-green-600 dark:text-green-400">Saved!</span>}
+        {saved && <span role="status" aria-live="polite" className="text-sm text-green-600 dark:text-green-400">Saved!</span>}
       </div>
     </div>
   );

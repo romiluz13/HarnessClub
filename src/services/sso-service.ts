@@ -12,6 +12,7 @@
 
 import { ObjectId, type Db } from "mongodb";
 import type { SsoConfigDocument, GroupMapping, JitProvisionEvent, SsoProviderType, SsoProviderPreset } from "@/types/sso";
+import { encryptSecret, isEncryptedSecret } from "@/lib/secret-crypto";
 
 // ─── SSO Config CRUD ──────────────────────────────────────
 
@@ -42,6 +43,16 @@ export async function upsertSsoConfig(
   }
 ): Promise<{ success: boolean; configId?: ObjectId }> {
   const now = new Date();
+  const oidcConfig = config.oidc
+    ? {
+        ...config.oidc,
+        clientSecretEncrypted: config.oidc.clientSecretEncrypted
+          ? (isEncryptedSecret(config.oidc.clientSecretEncrypted)
+            ? config.oidc.clientSecretEncrypted
+            : encryptSecret(config.oidc.clientSecretEncrypted))
+          : config.oidc.clientSecretEncrypted,
+      }
+    : undefined;
 
   const result = await db.collection<SsoConfigDocument>("sso_configs").findOneAndUpdate(
     { orgId },
@@ -50,7 +61,7 @@ export async function upsertSsoConfig(
         providerType: config.providerType,
         providerPreset: config.providerPreset,
         saml: config.saml,
-        oidc: config.oidc,
+        oidc: oidcConfig,
         groupMappings: config.groupMappings ?? [],
         jitProvisioning: config.jitProvisioning ?? false,
         enforceSSO: config.enforceSSO ?? false,
@@ -67,6 +78,31 @@ export async function upsertSsoConfig(
   );
 
   return { success: true, configId: result?._id };
+}
+
+export async function migrateOidcSecretIfNeeded(
+  db: Db,
+  config: SsoConfigDocument
+): Promise<SsoConfigDocument> {
+  const currentSecret = config.oidc?.clientSecretEncrypted;
+  if (!currentSecret || isEncryptedSecret(currentSecret)) {
+    return config;
+  }
+
+  const encryptedSecret = encryptSecret(currentSecret);
+  await db.collection<SsoConfigDocument>("sso_configs").updateOne(
+    { _id: config._id },
+    { $set: { "oidc.clientSecretEncrypted": encryptedSecret, updatedAt: new Date() } }
+  );
+
+  return {
+    ...config,
+    oidc: {
+      ...config.oidc!,
+      clientSecretEncrypted: encryptedSecret,
+    },
+    updatedAt: new Date(),
+  };
 }
 
 /**

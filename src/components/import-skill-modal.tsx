@@ -148,13 +148,13 @@ export function ImportSkillModal({ onClose }: ImportSkillModalProps) {
           </div>
 
           {error && (
-            <div className="flex items-center gap-2 rounded-lg bg-red-50 p-3 text-sm text-red-700">
+            <div role="alert" className="flex items-center gap-2 rounded-lg bg-red-50 p-3 text-sm text-red-700">
               <AlertCircle className="h-4 w-4 flex-shrink-0" />{error}
             </div>
           )}
 
           {success && (
-            <div className="flex items-center gap-2 rounded-lg bg-green-50 p-3 text-sm text-green-700">
+            <div role="status" aria-live="polite" className="flex items-center gap-2 rounded-lg bg-green-50 p-3 text-sm text-green-700">
               <CheckCircle className="h-4 w-4 flex-shrink-0" />{success}
             </div>
           )}

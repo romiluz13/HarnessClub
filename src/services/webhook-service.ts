@@ -9,6 +9,7 @@
 
 import { createHmac, randomBytes } from "crypto";
 import { ObjectId, type Db } from "mongodb";
+import { assertSafeOutboundUrl } from "@/lib/network-safety";
 
 /** Webhook event types */
 export type WebhookEvent =
@@ -68,13 +69,14 @@ export async function createWebhook(
   db: Db,
   input: { orgId: ObjectId; teamId?: ObjectId; url: string; events: WebhookEvent[] }
 ): Promise<{ webhookId: ObjectId; secret: string }> {
+  const safeUrl = await assertSafeOutboundUrl(input.url);
   const secret = randomBytes(32).toString("hex");
   const now = new Date();
 
   const result = await db.collection("webhooks").insertOne({
     orgId: input.orgId,
     teamId: input.teamId,
-    url: input.url,
+    url: safeUrl.toString(),
     events: input.events,
     secret,
     active: true,
@@ -111,16 +113,20 @@ export async function dispatchWebhook(
     const signature = signPayload(body, wh.secret);
 
     // Fire-and-forget delivery
-    fetch(wh.url, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "X-AgentConfig-Signature": `sha256=${signature}`,
-        "X-AgentConfig-Event": event,
-      },
-      body,
-      signal: AbortSignal.timeout(10_000),
-    })
+    Promise.resolve()
+      .then(async () => {
+        const safeUrl = await assertSafeOutboundUrl(wh.url);
+        return fetch(safeUrl, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "X-Harness-Lab-Signature": `sha256=${signature}`,
+            "X-Harness-Lab-Event": event,
+          },
+          body,
+          signal: AbortSignal.timeout(10_000),
+        });
+      })
       .then(() => {
         db.collection("webhooks").updateOne(
           { _id: wh._id },

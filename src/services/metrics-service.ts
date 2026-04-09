@@ -45,46 +45,19 @@ export interface MetricsReport {
   computedAt: string;
 }
 
-// ─── Metric Computation ───────────────────────────────────
+interface MetricsComputationInput {
+  assets: Array<Pick<AssetDocument, "lastScan" | "isPublished">>;
+  activeUserCount: number;
+  totalMembers: number;
+  exportCount: number;
+  previousMetrics?: GoalMetric[];
+}
 
-/**
- * Compute KPI metrics for a set of teams.
- */
-export async function computeMetrics(
-  db: Db,
-  scopeType: "team" | "department" | "org",
-  scopeId: ObjectId,
-  teamIds: ObjectId[]
-): Promise<GoalMetric[]> {
-  const now = new Date();
-  const thirtyDaysAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
-
-  // Parallel queries
-  const [assets, activeUserCount, totalMembers, exportCount] = await Promise.all([
-    db.collection<AssetDocument>("assets")
-      .find({ teamId: { $in: teamIds } })
-      .project({ lastScan: 1, isPublished: 1, createdAt: 1, updatedAt: 1 })
-      .toArray(),
-    db.collection("audit_logs").aggregate([
-      { $match: { teamId: { $in: teamIds }, timestamp: { $gte: thirtyDaysAgo } } },
-      { $group: { _id: "$actorId" } },
-      { $count: "total" },
-    ]).toArray().then((r) => r[0]?.total ?? 0),
-    db.collection("users").countDocuments({
-      "teamMemberships.teamId": { $in: teamIds },
-    }),
-    db.collection("audit_logs").countDocuments({
-      teamId: { $in: teamIds },
-      action: "asset:export",
-      timestamp: { $gte: thirtyDaysAgo },
-    }),
-  ]);
-
-  // Get previous snapshot for trend comparison
-  const prevSnapshot = await db.collection<MetricsSnapshot>("metrics_snapshots")
-    .findOne({ scopeType, scopeId }, { sort: { takenAt: -1 } });
+function buildMetrics(
+  input: MetricsComputationInput
+): GoalMetric[] {
   const prevMap = new Map(
-    (prevSnapshot?.metrics ?? []).map((m) => [m.key, m.current])
+    (input.previousMetrics ?? []).map((metric) => [metric.key, metric.current])
   );
 
   function trend(key: string, current: number): { trend: "up" | "down" | "flat"; trendDelta: number } {
@@ -95,26 +68,20 @@ export async function computeMetrics(
     return { trend: delta > 0 ? "up" : "down", trendDelta: Math.round(delta * 10) / 10 };
   }
 
-  // ── Compute each metric ──
+  const scannedCount = input.assets.filter((asset) => asset.lastScan != null).length;
+  const scanPct = input.assets.length > 0 ? Math.round((scannedCount / input.assets.length) * 100) : 100;
 
-  // 1. Scan Coverage %
-  const scannedCount = assets.filter((a) => a.lastScan != null).length;
-  const scanPct = assets.length > 0 ? Math.round((scannedCount / assets.length) * 100) : 100;
-
-  // 2. Trust A/B rate %
-  const trustAB = assets.filter((a) => {
-    if (!a.lastScan) return false;
-    return a.lastScan.findingCounts.critical === 0 && a.lastScan.findingCounts.high === 0;
+  const trustAB = input.assets.filter((asset) => {
+    if (!asset.lastScan) return false;
+    return asset.lastScan.findingCounts.critical === 0 && asset.lastScan.findingCounts.high === 0;
   }).length;
-  const trustPct = assets.length > 0 ? Math.round((trustAB / assets.length) * 100) : 100;
+  const trustPct = input.assets.length > 0 ? Math.round((trustAB / input.assets.length) * 100) : 100;
 
-  // 3. Adoption rate (active users / total members)
-  const adoptionPct = totalMembers > 0
-    ? Math.round((activeUserCount / totalMembers) * 100) : 0;
+  const adoptionPct = input.totalMembers > 0
+    ? Math.round((input.activeUserCount / input.totalMembers) * 100)
+    : 0;
 
-  // 4. Export count (30d)
-
-  const metrics: GoalMetric[] = [
+  return [
     {
       key: "scan_coverage",
       label: "Scan Coverage",
@@ -142,14 +109,60 @@ export async function computeMetrics(
     {
       key: "exports_30d",
       label: "Exports (30d)",
-      current: exportCount,
+      current: input.exportCount,
       target: 20, floor: 5, stretch: 50,
       unit: "count",
-      ...trend("exports_30d", exportCount),
+      ...trend("exports_30d", input.exportCount),
     },
   ];
+}
 
-  return metrics;
+// ─── Metric Computation ───────────────────────────────────
+
+/**
+ * Compute KPI metrics for a set of teams.
+ */
+export async function computeMetrics(
+  db: Db,
+  scopeType: "team" | "department" | "org",
+  scopeId: ObjectId,
+  teamIds: ObjectId[]
+): Promise<GoalMetric[]> {
+  const now = new Date();
+  const thirtyDaysAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+
+  // Parallel queries
+  const [assets, activeUserCount, totalMembers, exportCount] = await Promise.all([
+    db.collection<AssetDocument>("assets")
+      .find({ teamId: { $in: teamIds } })
+      .project({ lastScan: 1, isPublished: 1, createdAt: 1, updatedAt: 1 })
+      .toArray() as Promise<Array<Pick<AssetDocument, "lastScan" | "isPublished">>>,
+    db.collection("audit_logs").aggregate([
+      { $match: { teamId: { $in: teamIds }, timestamp: { $gte: thirtyDaysAgo } } },
+      { $group: { _id: "$actorId" } },
+      { $count: "total" },
+    ]).toArray().then((r) => r[0]?.total ?? 0),
+    db.collection("users").countDocuments({
+      "teamMemberships.teamId": { $in: teamIds },
+    }),
+    db.collection("audit_logs").countDocuments({
+      teamId: { $in: teamIds },
+      action: "asset:export",
+      timestamp: { $gte: thirtyDaysAgo },
+    }),
+  ]);
+
+  // Get previous snapshot for trend comparison
+  const prevSnapshot = await db.collection<MetricsSnapshot>("metrics_snapshots")
+    .findOne({ scopeType, scopeId }, { sort: { takenAt: -1 } });
+
+  return buildMetrics({
+    assets,
+    activeUserCount,
+    totalMembers,
+    exportCount,
+    previousMetrics: prevSnapshot?.metrics,
+  });
 }
 
 // ─── Trend Snapshots ──────────────────────────────────────
@@ -237,34 +250,104 @@ export async function compareDepartments(
     .toArray();
 
   if (departments.length === 0) return [];
+  const deptIds = departments.map((department) => department._id as ObjectId);
+  const teams = await db.collection("teams")
+    .find({ orgId, departmentId: { $in: deptIds } })
+    .project({ _id: 1, departmentId: 1 })
+    .toArray();
+  const allTeamIds = teams.map((team) => team._id as ObjectId);
 
-  const results = await Promise.all(
-    departments.map(async (dept) => {
-      const teams = await db.collection("teams")
-        .find({ departmentId: dept._id })
-        .project({ _id: 1 })
-        .toArray();
-      const teamIds = teams.map((t) => t._id);
+  if (allTeamIds.length === 0) {
+    return departments.map((department) => ({
+      departmentId: department._id.toHexString(),
+      departmentName: department.name,
+      teamCount: 0,
+      assetCount: 0,
+      metrics: [],
+    }));
+  }
 
-      const assetCount = teamIds.length > 0
-        ? await db.collection("assets").countDocuments({ teamId: { $in: teamIds } })
-        : 0;
+  const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+  const [assets, recentAuditLogs, users, snapshots] = await Promise.all([
+    db.collection<AssetDocument>("assets")
+      .find({ teamId: { $in: allTeamIds } })
+      .project({ teamId: 1, lastScan: 1, isPublished: 1 })
+      .toArray(),
+    db.collection("audit_logs")
+      .find({ teamId: { $in: allTeamIds }, timestamp: { $gte: thirtyDaysAgo } })
+      .project({ actorId: 1, teamId: 1, action: 1 })
+      .toArray(),
+    db.collection("users")
+      .find({ "teamMemberships.teamId": { $in: allTeamIds } })
+      .project({ teamMemberships: 1 })
+      .toArray(),
+    db.collection<MetricsSnapshot>("metrics_snapshots")
+      .find({ scopeType: "department", scopeId: { $in: deptIds } })
+      .sort({ takenAt: -1 })
+      .toArray(),
+  ]);
 
-      const metrics = teamIds.length > 0
-        ? await computeMetrics(db, "department", dept._id, teamIds)
-        : [];
+  const deptTeamIds = new Map<string, ObjectId[]>();
+  for (const team of teams) {
+    const departmentId = (team.departmentId as ObjectId).toHexString();
+    const existing = deptTeamIds.get(departmentId) ?? [];
+    existing.push(team._id as ObjectId);
+    deptTeamIds.set(departmentId, existing);
+  }
 
-      return {
-        departmentId: dept._id.toHexString(),
-        departmentName: dept.name,
-        teamCount: teams.length,
-        assetCount,
-        metrics,
-      };
-    })
-  );
+  const assetsByTeamId = new Map<string, Array<Pick<AssetDocument, "lastScan" | "isPublished">>>();
+  for (const asset of assets) {
+    const key = asset.teamId.toHexString();
+    const existing = assetsByTeamId.get(key) ?? [];
+    existing.push({ lastScan: asset.lastScan, isPublished: asset.isPublished });
+    assetsByTeamId.set(key, existing);
+  }
 
-  return results;
+  const logsByTeamId = new Map<string, Array<{ actorId: ObjectId; action: string }>>();
+  for (const log of recentAuditLogs) {
+    const key = (log.teamId as ObjectId).toHexString();
+    const existing = logsByTeamId.get(key) ?? [];
+    existing.push({ actorId: log.actorId as ObjectId, action: String(log.action) });
+    logsByTeamId.set(key, existing);
+  }
+
+  const latestSnapshotByDeptId = new Map<string, MetricsSnapshot>();
+  for (const snapshot of snapshots) {
+    const key = snapshot.scopeId.toHexString();
+    if (!latestSnapshotByDeptId.has(key)) {
+      latestSnapshotByDeptId.set(key, snapshot);
+    }
+  }
+
+  return departments.map((department) => {
+    const departmentId = department._id.toHexString();
+    const teamIds = deptTeamIds.get(departmentId) ?? [];
+    const teamIdSet = new Set(teamIds.map((teamId) => teamId.toHexString()));
+
+    const departmentAssets = teamIds.flatMap((teamId) => assetsByTeamId.get(teamId.toHexString()) ?? []);
+    const departmentLogs = teamIds.flatMap((teamId) => logsByTeamId.get(teamId.toHexString()) ?? []);
+    const activeUsers = new Set(departmentLogs.map((log) => log.actorId.toHexString()));
+    const exportCount = departmentLogs.filter((log) => log.action === "asset:export").length;
+    const totalMembers = users.filter((user) =>
+      (user.teamMemberships as Array<{ teamId: ObjectId }> | undefined)?.some((membership) =>
+        teamIdSet.has(membership.teamId.toHexString())
+      )
+    ).length;
+
+    return {
+      departmentId,
+      departmentName: department.name,
+      teamCount: teamIds.length,
+      assetCount: departmentAssets.length,
+      metrics: buildMetrics({
+        assets: departmentAssets,
+        activeUserCount: activeUsers.size,
+        totalMembers,
+        exportCount,
+        previousMetrics: latestSnapshotByDeptId.get(departmentId)?.metrics,
+      }),
+    };
+  });
 }
 
 /**

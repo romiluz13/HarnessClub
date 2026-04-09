@@ -16,6 +16,7 @@ import { computeTrustScore } from "@/services/trust-score";
 import { getEffectiveReleaseStatus } from "@/types/asset";
 import { validateApiToken } from "@/services/api-token-service";
 import type { OrgRole, TeamRole } from "@/types/team";
+import { hasOrgPermission, type Permission } from "@/lib/rbac";
 
 /** Serialized asset for API response (ObjectId → string) */
 export interface AssetResponse {
@@ -158,4 +159,17 @@ export async function getOrgRole(
   );
   if (!user?.orgMemberships?.[0]) return null;
   return user.orgMemberships[0].role as OrgRole;
+}
+
+export async function requireOrgPermission(
+  db: Db,
+  userId: ObjectId,
+  orgId: ObjectId,
+  permission: Permission
+): Promise<OrgRole | null> {
+  const role = await getOrgRole(db, userId, orgId);
+  if (!role || !hasOrgPermission(role, permission)) {
+    return null;
+  }
+  return role;
 }
